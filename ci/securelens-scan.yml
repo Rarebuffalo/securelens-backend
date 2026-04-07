@@ -1,0 +1,46 @@
+name: SecureLens CI/CD Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Example: Wait for deployment/staging URL to be available
+      - name: Run SecureLens Scan
+        env:
+          SECURELENS_API_URL: "https://your-securelens-instance.com"
+          SECURELENS_API_KEY: ${{ secrets.SECURELENS_API_KEY }}
+          TARGET_URL: "https://staging.your-app.com"
+          MINIMUM_SCORE: 80
+        run: |
+          echo "Initiating SecureLens Scan against $TARGET_URL"
+          
+          # Trigger Scan
+          RESPONSE=$(curl -s -X POST "$SECURELENS_API_URL/scans/scan" \
+            -H "X-API-Key: $SECURELENS_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"url\": \"$TARGET_URL\"}")
+            
+          # Extract score using jq
+          SCORE=$(echo $RESPONSE | jq -r '.security_score')
+          SCAN_ID=$(echo $RESPONSE | jq -r '.id')
+          
+          echo "Scan completed (ID: $SCAN_ID)"
+          echo "Security Score: $SCORE"
+          
+          # Check Threshold
+          if (( $(echo "$SCORE < $MINIMUM_SCORE" | bc -l) )); then
+            echo "::error::Security score ($SCORE) is below the minimum threshold ($MINIMUM_SCORE)"
+            exit 1
+          else
+            echo "Security check passed!"
+            exit 0
+          fi
