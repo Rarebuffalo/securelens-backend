@@ -9,7 +9,7 @@ sqlalchemy[asyncio]
 aiosqlite
 asyncpg
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 pydantic[email]
 pytest
 pytest-asyncio
