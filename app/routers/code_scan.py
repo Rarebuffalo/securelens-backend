@@ -56,6 +56,20 @@ async def analyze_codebase(request: CodeScanRequest):
     except Exception as e:
         logger.error(f"Code scan failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/code-scan/models")
+async def list_available_models():
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+    try:
+        from google import genai
+        client = genai.Client(api_key=settings.gemini_api_key)
+        models = []
+        for model in client.models.list():
+            if 'generateContent' in model.supported_actions:
+                models.append(model.name)
+        return {"models": models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching models: {e}")
 
 @router.post("/code-scan/chat", response_model=CodeChatResponse)
 async def chat_with_scan(request: CodeChatRequest):
@@ -87,7 +101,7 @@ async def chat_with_scan(request: CodeChatRequest):
         
         client = genai.Client(api_key=settings.gemini_api_key)
         response = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.5,

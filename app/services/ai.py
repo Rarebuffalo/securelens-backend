@@ -14,7 +14,7 @@ else:
     ai_client = None
 
 async def get_gemini_model():
-    return 'gemini-2.5-flash'
+    return 'gemini-2.0-flash'
 
 async def enhance_security_issues(issues: list[dict]) -> dict:
     if not settings.gemini_api_key:
