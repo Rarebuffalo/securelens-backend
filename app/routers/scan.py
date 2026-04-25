@@ -99,7 +99,7 @@ async def scan_website(
         score = calculate_score(all_issues)
         layers = calculate_layer_statuses(all_issues)
 
-        if settings.openai_api_key and all_issues:
+        if settings.gemini_api_key and all_issues:
             issues_dict_list = [i.model_dump() for i in all_issues]
             ai_data = await enhance_security_issues(issues_dict_list)
             enhanced_list = ai_data.get("enhanced_issues", [])

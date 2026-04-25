@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 
 from app.schemas.code_scan import CodeScanRequest, CodeScanResponse, CodeChatRequest, CodeChatResponse
-from app.services.code_scanner.orchestrator import CodeScanOrchestrator, client
+from app.services.code_scanner.orchestrator import CodeScanOrchestrator
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -59,32 +59,41 @@ async def analyze_codebase(request: CodeScanRequest):
 
 @router.post("/code-scan/chat", response_model=CodeChatResponse)
 async def chat_with_scan(request: CodeChatRequest):
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=400, detail="AI Chat is disabled because OPENAI_API_KEY is not configured.")
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=400, detail="AI Chat is disabled because GEMINI_API_KEY is not configured.")
+        
+    from google import genai
+    with open("/app/models.txt", "w") as f:
+        # Just writing a placeholder, list_models is different in new SDK
+        f.write("AVAILABLE MODELS: migrated to new SDK")
         
     scan_data = scan_store.get(request.scan_id)
     if not scan_data:
         raise HTTPException(status_code=404, detail="Scan ID not found or expired.")
         
-    system_prompt = (
+    prompt = (
         "You are SecureLens AI, an expert application security assistant. "
         "You are helping a developer understand a security scan report for their codebase. "
         f"Here is the context of the scan for the repository {scan_data.repo_url}:\n"
         f"Summary: {scan_data.summary}\n"
         f"Vulnerabilities: {json.dumps([v.model_dump() for v in scan_data.issues])}\n\n"
+        f"User Message: {request.message}\n\n"
         "Answer the user's questions clearly, concisely, and professionally. Provide code fixes if requested."
     )
 
     try:
-        response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.message}
-            ],
-            temperature=0.5,
+        from google import genai
+        from google.genai import types
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        response = await client.aio.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.5,
+            )
         )
-        reply = response.choices[0].message.content or "No response from AI."
+        reply = response.text or "No response from AI."
         return CodeChatResponse(reply=reply)
     except Exception as e:
         logger.error(f"AI Chat Error: {str(e)}")
