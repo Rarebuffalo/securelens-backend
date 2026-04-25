@@ -10,7 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import settings
 from app.database import close_db, init_db
 from app.middleware.rate_limiter import limiter
-from app.routers import auth, health, history, scan, apikey, report
+from app.routers import auth, health, history, scan, apikey, report, code_scan
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -56,6 +56,7 @@ def create_app() -> FastAPI:
     application.include_router(history.router)
     application.include_router(apikey.router)
     application.include_router(report.router)
+    application.include_router(code_scan.router)
 
     logger.info(f"{settings.app_name} v{settings.app_version} initialized")
 
