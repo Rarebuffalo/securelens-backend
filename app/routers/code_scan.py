@@ -76,11 +76,6 @@ async def chat_with_scan(request: CodeChatRequest):
     if not settings.gemini_api_key:
         raise HTTPException(status_code=400, detail="AI Chat is disabled because GEMINI_API_KEY is not configured.")
         
-    from google import genai
-    with open("/app/models.txt", "w") as f:
-        # Just writing a placeholder, list_models is different in new SDK
-        f.write("AVAILABLE MODELS: migrated to new SDK")
-        
     scan_data = scan_store.get(request.scan_id)
     if not scan_data:
         raise HTTPException(status_code=404, detail="Scan ID not found or expired.")
