@@ -22,6 +22,7 @@ from app.services.scanner.dns import DNSScanner
 from app.services.scanner.ports import PortScanner
 from app.services.scoring import calculate_layer_statuses, calculate_score
 from app.services.ai import enhance_security_issues
+from app.services.threat_intel import get_threat_intel_summary
 from app.utils.validators import validate_url
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,8 @@ async def scan_website(
         
         dns_task = asyncio.create_task(dns_scanner.scan(url))
         port_task = asyncio.create_task(port_scanner.scan(url))
+        # Step 3: Run threat intel lookup concurrently — zero extra latency
+        threat_intel_task = asyncio.create_task(get_threat_intel_summary(url))
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(settings.scan_timeout),
@@ -95,11 +98,12 @@ async def scan_website(
         # Await infrastructure scans
         all_issues.extend(await dns_task)
         all_issues.extend(await port_task)
+        threat_intel = await threat_intel_task
 
         score = calculate_score(all_issues)
         layers = calculate_layer_statuses(all_issues)
 
-        if settings.gemini_api_key and all_issues:
+        if settings.effective_ai_key and all_issues:
             issues_dict_list = [i.model_dump() for i in all_issues]
             ai_data = await enhance_security_issues(issues_dict_list)
             enhanced_list = ai_data.get("enhanced_issues", [])
@@ -144,6 +148,7 @@ async def scan_website(
             layers=layers,
             issues=all_issues,
             created_at=created_at,
+            threat_intel=threat_intel,  # Step 3: attach threat intelligence
         )
 
     except httpx.HTTPError as e:
