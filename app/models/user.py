@@ -21,5 +21,6 @@ class User(Base):
     )
 
     scans = relationship("ScanResult", back_populates="user", lazy="selectin")
+    code_scans = relationship("CodeScanResult", back_populates="user", lazy="selectin", cascade="all, delete")
     api_keys = relationship("ApiKey", back_populates="user", lazy="selectin", cascade="all, delete")
     webhooks = relationship("Webhook", back_populates="user", lazy="selectin", cascade="all, delete")

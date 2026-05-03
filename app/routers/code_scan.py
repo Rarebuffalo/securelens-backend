@@ -1,10 +1,41 @@
-import logging
-import uuid
-import json
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+"""
+Code Scan Router
+================
 
-from app.schemas.code_scan import CodeScanRequest, CodeScanResponse, CodeChatRequest, CodeChatResponse
+Two endpoints:
+  POST /code-scan/analyze  — Clone repo tree, triage + analyze files with AI,
+                              persist result to PostgreSQL, return scan_id.
+  POST /code-scan/chat     — Load the persisted scan from DB and answer questions.
+  GET  /code-scan/models   — List available AI models (debug / informational).
+
+Why we moved away from in-memory scan_store:
+  The original implementation stored scan results in a plain Python dict.
+  This caused two critical problems:
+    1. Any server restart or crash wiped all stored context, breaking chat.
+    2. Multiple Uvicorn workers have isolated memory; a scan on worker A
+       cannot be chatted with on worker B.
+  By persisting to PostgreSQL we get durability, scalability, and historical
+  records of all code scans (same pattern as the web scanner).
+"""
+
+import logging
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Dict
+
+from app.database import get_db
+from app.middleware.auth import get_optional_user
+from app.models.code_scan import CodeScanResult
+from app.models.user import User
+from app.schemas.code_scan import (
+    CodeScanRequest,
+    CodeScanResponse,
+    CodeChatRequest,
+    CodeChatResponse,
+    VulnerabilityIssue,
+)
 from app.services.code_scanner.orchestrator import CodeScanOrchestrator
 from app.config import settings
 
@@ -12,98 +43,159 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["code-scan"])
 
-# In-memory store for scan results to support chat context.
-# In a real production app, this would be stored in the database.
-scan_store: Dict[str, CodeScanResponse] = {}
+
+# ---------------------------------------------------------------------------
+# POST /code-scan/analyze
+# ---------------------------------------------------------------------------
 
 @router.post("/code-scan/analyze", response_model=CodeScanResponse)
-async def analyze_codebase(request: CodeScanRequest):
+async def analyze_codebase(
+    request: CodeScanRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    """
+    Full agentic scan of a GitHub repository.
+
+    Flow:
+      1. Fetch the full file tree from GitHub.
+      2. Ask the AI to triage (select) the most security-critical files.
+      3. Analyze each triaged file for OWASP Top-10 vulnerabilities.
+      4. Generate an executive summary of all findings.
+      5. Persist the result to `code_scan_results` table.
+      6. Return the scan_id so the frontend can open a chat session.
+    """
     logger.info(f"Starting code scan for {request.repo_url}")
-    
+
     try:
         orchestrator = CodeScanOrchestrator(
             repo_url=request.repo_url,
             github_token=request.github_token,
-            branch=request.branch or "main"
+            branch=request.branch or "main",
         )
-        
-        # 1. Fetch repo structure
-        all_files = await orchestrator.github.get_repo_tree(request.repo_url, request.branch or "main")
-        
-        # 2. Triage files
+
+        # Step 1 — Fetch file tree
+        all_files = await orchestrator.github.get_repo_tree(
+            request.repo_url, request.branch or "main"
+        )
+
+        # Step 2 — AI triage: pick the most security-sensitive files
         triaged_files = await orchestrator.triage_files(all_files)
         logger.info(f"Triaged {len(triaged_files)} files out of {len(all_files)}.")
-        
-        # 3. Analyze triaged files
+
+        # Step 3 — Analyze each file
         vulnerabilities = await orchestrator.analyze_files(triaged_files)
-        
-        # 4. Generate Summary
+
+        # Step 4 — Generate summary
         summary = await orchestrator.generate_summary(vulnerabilities)
-        
-        scan_id = str(uuid.uuid4())
-        
-        response = CodeScanResponse(
+
+        # Step 5 — Persist to database
+        # Serialise VulnerabilityIssue objects to plain dicts for JSON storage.
+        issues_as_dicts = [v.model_dump() for v in vulnerabilities]
+
+        scan_record = CodeScanResult(
+            user_id=current_user.id if current_user else None,
+            repo_url=request.repo_url,
+            summary=summary,
+            issues=issues_as_dicts,
+        )
+        db.add(scan_record)
+        await db.flush()  # flush to get the auto-generated id without committing yet
+        scan_id = scan_record.id
+
+        logger.info(f"Code scan {scan_id} persisted to database.")
+
+        return CodeScanResponse(
             scan_id=scan_id,
             repo_url=request.repo_url,
             summary=summary,
-            issues=vulnerabilities
+            issues=vulnerabilities,
         )
-        
-        # Save to in-memory store for the chat feature
-        scan_store[scan_id] = response
-        
-        return response
+
     except Exception as e:
         logger.error(f"Code scan failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# POST /code-scan/chat
+# ---------------------------------------------------------------------------
+
+@router.post("/code-scan/chat", response_model=CodeChatResponse)
+async def chat_with_scan(
+    request: CodeChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Conversational Q&A grounded in a previously completed code scan.
+
+    We load the scan from PostgreSQL using the scan_id, so this works
+    correctly across server restarts and multiple workers.
+    """
+    if not settings.ai_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="AI Chat is disabled because no AI API key is configured.",
+        )
+
+    # Load the scan record from DB
+    result = await db.execute(
+        select(CodeScanResult).where(CodeScanResult.id == request.scan_id)
+    )
+    scan_data = result.scalar_one_or_none()
+
+    if not scan_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Scan ID not found. The scan may have expired or never existed.",
+        )
+
+    # Build a rich context-aware prompt
+    prompt = (
+        "You are SecureLens AI, an expert application security assistant. "
+        "You are helping a developer understand a security scan report for their codebase. "
+        f"Here is the context of the scan for the repository '{scan_data.repo_url}':\n\n"
+        f"Executive Summary:\n{scan_data.summary}\n\n"
+        f"Vulnerabilities Found:\n{json.dumps(scan_data.issues, indent=2)}\n\n"
+        f"Developer's Question: {request.message}\n\n"
+        "Answer clearly, concisely, and professionally. "
+        "Provide specific code fixes when requested. "
+        "Reference the exact file paths and line numbers from the scan data when relevant."
+    )
+
+    try:
+        # Use the unified AI service so it respects whatever provider is configured
+        from app.services.ai import call_ai
+        reply = await call_ai(prompt, temperature=0.5)
+        return CodeChatResponse(reply=reply)
+    except Exception as e:
+        logger.error(f"AI Chat Error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="I encountered an error trying to process your request.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# GET /code-scan/models  (informational / debug)
+# ---------------------------------------------------------------------------
+
 @router.get("/code-scan/models")
 async def list_available_models():
-    if not settings.gemini_api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+    """
+    Lists AI models available to the configured provider.
+    Only meaningful when using the Gemini provider.
+    """
+    if not settings.ai_api_key:
+        raise HTTPException(status_code=500, detail="No AI API key is set.")
     try:
         from google import genai
-        client = genai.Client(api_key=settings.gemini_api_key)
+
+        client = genai.Client(api_key=settings.ai_api_key)
         models = []
         for model in client.models.list():
-            if 'generateContent' in model.supported_actions:
+            if "generateContent" in model.supported_actions:
                 models.append(model.name)
         return {"models": models}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching models: {e}")
-
-@router.post("/code-scan/chat", response_model=CodeChatResponse)
-async def chat_with_scan(request: CodeChatRequest):
-    if not settings.gemini_api_key:
-        raise HTTPException(status_code=400, detail="AI Chat is disabled because GEMINI_API_KEY is not configured.")
-        
-    scan_data = scan_store.get(request.scan_id)
-    if not scan_data:
-        raise HTTPException(status_code=404, detail="Scan ID not found or expired.")
-        
-    prompt = (
-        "You are SecureLens AI, an expert application security assistant. "
-        "You are helping a developer understand a security scan report for their codebase. "
-        f"Here is the context of the scan for the repository {scan_data.repo_url}:\n"
-        f"Summary: {scan_data.summary}\n"
-        f"Vulnerabilities: {json.dumps([v.model_dump() for v in scan_data.issues])}\n\n"
-        f"User Message: {request.message}\n\n"
-        "Answer the user's questions clearly, concisely, and professionally. Provide code fixes if requested."
-    )
-
-    try:
-        from google import genai
-        from google.genai import types
-        
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = await client.aio.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.5,
-            )
-        )
-        reply = response.text or "No response from AI."
-        return CodeChatResponse(reply=reply)
-    except Exception as e:
-        logger.error(f"AI Chat Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="I encountered an error trying to process your request.")
