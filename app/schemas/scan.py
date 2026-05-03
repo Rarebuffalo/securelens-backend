@@ -1,6 +1,11 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field
+
+# Import the ThreatIntelReport schema from the service layer.
+# We import it here for use in ScanResponse so the schema stays clean.
+from app.services.threat_intel import ThreatIntelReport
 
 
 class ScanRequest(BaseModel):
@@ -29,6 +34,8 @@ class ScanResponse(BaseModel):
     layers: dict[str, LayerStatus]
     issues: list[Issue]
     created_at: datetime | None = None
+    # Step 3: Threat intelligence enrichment (optional — only present when API keys are set)
+    threat_intel: Optional[ThreatIntelReport] = None
 
 
 class ScanHistoryItem(BaseModel):
