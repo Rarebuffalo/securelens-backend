@@ -6,6 +6,9 @@ Two endpoints:
   POST /code-scan/analyze  — Clone repo tree, triage + analyze files with AI,
                               persist result to PostgreSQL, return scan_id.
   POST /code-scan/chat     — Load the persisted scan from DB and answer questions.
+  GET  /code-scan/history  — List your past repository scans.
+  GET  /code-scan/{id}     — Get details of a specific code scan.
+  DELETE /code-scan/{id}  — Delete a code scan.
   GET  /code-scan/models   — List available AI models (debug / informational).
 
 Why we moved away from in-memory scan_store:
@@ -20,13 +23,13 @@ Why we moved away from in-memory scan_store:
 
 import logging
 import json
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict
 
 from app.database import get_db
-from app.middleware.auth import get_optional_user
+from app.middleware.auth import get_current_user, get_optional_user
 from app.models.code_scan import CodeScanResult
 from app.models.user import User
 from app.schemas.code_scan import (
@@ -35,6 +38,8 @@ from app.schemas.code_scan import (
     CodeChatRequest,
     CodeChatResponse,
     VulnerabilityIssue,
+    CodeScanHistoryItem,
+    CodeScanHistoryResponse,
 )
 from app.services.code_scanner.orchestrator import CodeScanOrchestrator
 from app.config import settings
@@ -174,6 +179,99 @@ async def chat_with_scan(
             status_code=500,
             detail="I encountered an error trying to process your request.",
         )
+
+
+# ---------------------------------------------------------------------------
+# History Management
+# ---------------------------------------------------------------------------
+
+@router.get("/code-scan/history", response_model=CodeScanHistoryResponse)
+async def list_code_scans(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List history of repository scans for the authenticated user.
+    """
+    offset = (page - 1) * per_page
+
+    # Count total scans for this user
+    count_result = await db.execute(
+        select(func.count()).select_from(CodeScanResult).where(CodeScanResult.user_id == current_user.id)
+    )
+    total = count_result.scalar_one()
+
+    # Fetch paginated results
+    result = await db.execute(
+        select(CodeScanResult)
+        .where(CodeScanResult.user_id == current_user.id)
+        .order_by(CodeScanResult.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    scans = result.scalars().all()
+
+    return CodeScanHistoryResponse(
+        scans=[CodeScanHistoryItem.model_validate(s) for s in scans],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/code-scan/{scan_id}", response_model=CodeScanResponse)
+async def get_code_scan(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Fetch the full details of a specific code scan by ID.
+    """
+    result = await db.execute(
+        select(CodeScanResult).where(
+            CodeScanResult.id == scan_id,
+            CodeScanResult.user_id == current_user.id,
+        )
+    )
+    scan = result.scalar_one_or_none()
+
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+
+    return CodeScanResponse(
+        scan_id=scan.id,
+        repo_url=scan.repo_url,
+        summary=scan.summary,
+        issues=[VulnerabilityIssue(**i) for i in scan.issues],
+        created_at=scan.created_at,
+    )
+
+
+@router.delete("/code-scan/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_code_scan(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a code scan record from history.
+    """
+    result = await db.execute(
+        select(CodeScanResult).where(
+            CodeScanResult.id == scan_id,
+            CodeScanResult.user_id == current_user.id,
+        )
+    )
+    scan = result.scalar_one_or_none()
+
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+
+    await db.delete(scan)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
