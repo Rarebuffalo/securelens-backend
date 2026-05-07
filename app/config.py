@@ -61,9 +61,34 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     gemini_api_key: str | None = None
 
-    # Threat Intelligence API keys (Step 3)
+    # Threat Intelligence API keys
     virustotal_api_key: str | None = None
     abuseipdb_api_key: str | None = None
+
+    # -------------------------------------------------------------------------
+    # Active Scanning — Nuclei (optional)
+    # -------------------------------------------------------------------------
+    # Path to the nuclei binary. Leave blank to search PATH automatically.
+    # Install: go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+    nuclei_binary_path: str | None = None
+
+    # -------------------------------------------------------------------------
+    # Slack Alerts (optional)
+    # -------------------------------------------------------------------------
+    # Slack Incoming Webhook URL. Create one at:
+    # https://api.slack.com/messaging/webhooks
+    slack_webhook_url: str | None = None
+
+    # -------------------------------------------------------------------------
+    # Email Alerts via SMTP (optional)
+    # -------------------------------------------------------------------------
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    # Set to true for port 465 (SMTP_SSL). Defaults to false (STARTTLS).
+    smtp_use_ssl: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

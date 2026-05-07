@@ -47,6 +47,11 @@ from app.models.webhook import Webhook
 from app.services.scoring import calculate_layer_statuses, calculate_score
 from app.services.ai import enhance_security_issues
 from app.services.webhook_dispatcher import dispatch_webhooks
+from app.services.alerting import (
+    send_slack_alert,
+    send_email_alert,
+    build_regression_email_body,
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -150,13 +155,13 @@ async def _run_single_scan(scheduled: ScheduledScan) -> None:
 
             await db.commit()
 
-            # Fire webhooks if the score dropped
+            # Fire webhooks, Slack alert, and email if the score dropped
             score_dropped = previous_score is not None and score < previous_score
             if score_dropped:
                 delta = previous_score - score
                 logger.warning(
                     f"Score dropped {delta} pts for {url} "
-                    f"({previous_score} → {score}). Firing webhooks."
+                    f"({previous_score} -> {score}). Sending regression alerts."
                 )
                 webhook_payload = {
                     "event": "scheduled_scan_regression",
@@ -167,6 +172,32 @@ async def _run_single_scan(scheduled: ScheduledScan) -> None:
                     "score_delta": -delta,
                 }
                 await dispatch_webhooks(user_id, webhook_payload, db)
+
+                slack_title = f"Score regression detected for {validated_url}"
+                slack_msg = (
+                    f"Previous score: {previous_score}/100\n"
+                    f"New score: {score}/100 ({-delta:+d} points)\n"
+                    f"Action: Review the latest scan in SecureLens."
+                )
+                await send_slack_alert(title=slack_title, message=slack_msg)
+
+                # Fetch user email to send the regression alert
+                from sqlalchemy import select as _select
+                from app.models.user import User
+                async with AsyncSessionLocal() as email_db:
+                    user_result = await email_db.execute(
+                        _select(User).where(User.id == user_id)
+                    )
+                    user = user_result.scalar_one_or_none()
+                    if user:
+                        email_body = build_regression_email_body(
+                            validated_url, previous_score, score
+                        )
+                        await send_email_alert(
+                            to_email=user.email,
+                            subject=f"SecureLens: Score regression detected for {validated_url}",
+                            html_body=email_body,
+                        )
 
         logger.info(f"Scheduled scan complete: {url} → score={score}")
 

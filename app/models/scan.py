@@ -25,3 +25,4 @@ class ScanResult(Base):
     )
 
     user = relationship("User", back_populates="scans")
+    nuclei_result = relationship("NucleiScanResult", back_populates="scan_result", uselist=False, cascade="all, delete")

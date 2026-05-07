@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import httpx
@@ -24,6 +25,12 @@ from app.services.scoring import calculate_layer_statuses, calculate_score
 from app.services.ai import enhance_security_issues
 from app.services.threat_intel import get_threat_intel_summary
 from app.services.webhook_dispatcher import dispatch_webhooks
+from app.services.nuclei_scanner import run_nuclei_scan
+from app.services.alerting import (
+    send_slack_alert,
+    send_email_alert,
+    build_scan_email_body,
+)
 from app.utils.validators import validate_url
 
 logger = logging.getLogger(__name__)
@@ -39,6 +46,41 @@ dns_scanner = DNSScanner()
 port_scanner = PortScanner()
 
 
+async def _post_scan_tasks(
+    user_id: str,
+    user_email: str,
+    scan_id: str,
+    url: str,
+    score: int,
+    issue_count: int,
+    db: AsyncSession,
+) -> None:
+    """
+    Groups all post-scan side-effects that run as a background task:
+      - Dispatch webhooks
+      - Send Slack alert
+      - Send email alert
+      - Trigger Nuclei active scan
+
+    These all run after the response has been sent to the client, so they
+    never add latency to the scan endpoint.
+    """
+    scan_summary = {"scan_id": scan_id, "url": url, "score": score}
+    await dispatch_webhooks(user_id, scan_summary, db)
+
+    slack_msg = f"URL: {url}\nScore: {score}/100  |  Issues found: {issue_count}"
+    await send_slack_alert(title="SecureLens Scan Complete", message=slack_msg)
+
+    email_body = build_scan_email_body(url, score, issue_count)
+    await send_email_alert(
+        to_email=user_email,
+        subject=f"SecureLens: Scan complete for {url}",
+        html_body=email_body,
+    )
+
+    # Nuclei runs last — it creates its own DB session and takes the longest
+    await run_nuclei_scan(scan_id, url)
+
 
 @router.post("/scan", response_model=ScanResponse)
 @limiter.limit(settings.rate_limit)
@@ -52,11 +94,8 @@ async def scan_website(
     url = validate_url(data.url)
 
     try:
-        import asyncio
-        
         dns_task = asyncio.create_task(dns_scanner.scan(url))
         port_task = asyncio.create_task(port_scanner.scan(url))
-        # Step 3: Run threat intel lookup concurrently — zero extra latency
         threat_intel_task = asyncio.create_task(get_threat_intel_summary(url))
 
         async with httpx.AsyncClient(
@@ -71,8 +110,6 @@ async def scan_website(
         all_issues.extend(await header_scanner.scan(url, response))
         all_issues.extend(await cookie_scanner.scan(url, response))
         all_issues.extend(await exposure_scanner.scan(url, response))
-        
-        # Await infrastructure scans
         all_issues.extend(await dns_task)
         all_issues.extend(await port_task)
         threat_intel = await threat_intel_task
@@ -111,12 +148,16 @@ async def scan_website(
             scan_id = scan_record.id
             created_at = scan_record.created_at
 
-            scan_summary = {
-                "scan_id": scan_id,
-                "url": url,
-                "score": score
-            }
-            background_tasks.add_task(dispatch_webhooks, current_user.id, scan_summary, db)
+            background_tasks.add_task(
+                _post_scan_tasks,
+                current_user.id,
+                current_user.email,
+                scan_id,
+                url,
+                score,
+                len(all_issues),
+                db,
+            )
 
         return ScanResponse(
             id=scan_id,
@@ -125,7 +166,7 @@ async def scan_website(
             layers=layers,
             issues=all_issues,
             created_at=created_at,
-            threat_intel=threat_intel,  # Step 3: attach threat intelligence
+            threat_intel=threat_intel,
         )
 
     except httpx.HTTPError as e:
@@ -134,3 +175,4 @@ async def scan_website(
             status_code=502,
             content={"error": f"Could not reach {url}: {str(e)}"},
         )
+

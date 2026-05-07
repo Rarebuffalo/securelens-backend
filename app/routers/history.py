@@ -18,9 +18,17 @@ from app.schemas.scan import (
     ThreatNarrativeResponse,
     ScanDiffResponse,
     ScheduledScanResponse,
+    NucleiResultResponse,
+    RemediationPlan,
 )
 
-from app.services.ai import chat_with_scan_context, generate_threat_narrative, generate_diff_narrative
+from app.services.ai import (
+    chat_with_scan_context,
+    generate_threat_narrative,
+    generate_diff_narrative,
+    generate_remediation_plan,
+)
+from app.models.nuclei_result import NucleiScanResult
 
 router = APIRouter(prefix="/scans", tags=["history"])
 
@@ -236,3 +244,81 @@ async def diff_scans(
         score_change=score_change,
         narrative=narrative,
     )
+
+
+@router.get("/{scan_id}/nuclei", response_model=NucleiResultResponse)
+async def get_nuclei_result(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retrieve the Nuclei active scan result for a given website scan.
+
+    Nuclei runs as a background task after the main scan, so this result may
+    not be available immediately. Poll this endpoint until status is not
+    'pending'. If the Nuclei binary is not installed, status will be 'skipped'.
+    """
+    # Verify the parent scan belongs to the requesting user
+    scan_check = await db.execute(
+        select(ScanResult).where(
+            ScanResult.id == scan_id,
+            ScanResult.user_id == current_user.id,
+        )
+    )
+    if not scan_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    result = await db.execute(
+        select(NucleiScanResult).where(NucleiScanResult.scan_result_id == scan_id)
+    )
+    nuclei_row = result.scalar_one_or_none()
+
+    if not nuclei_row:
+        raise HTTPException(
+            status_code=404,
+            detail="Nuclei result not available yet. The background scan may still be running.",
+        )
+
+    return nuclei_row
+
+
+@router.post("/{scan_id}/remediation-plan", response_model=RemediationPlan)
+async def get_remediation_plan(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate an AI-powered prioritized remediation roadmap for a scan.
+
+    The AI receives the full list of issues found in the scan and returns a
+    sequenced fix plan: what to do first, how hard each fix is, and a
+    realistic total effort estimate. Each call to this endpoint triggers a
+    fresh AI generation — results are not cached.
+    """
+    result = await db.execute(
+        select(ScanResult).where(
+            ScanResult.id == scan_id,
+            ScanResult.user_id == current_user.id,
+        )
+    )
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    plan_data = await generate_remediation_plan(scan.issues, scan.url)
+
+    # Validate the AI response matches our schema before returning
+    try:
+        return RemediationPlan(
+            summary=plan_data.get("summary", ""),
+            steps=plan_data.get("steps", []),
+            estimated_total_effort=plan_data.get("estimated_total_effort", "N/A"),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse remediation plan from AI response: {e}",
+        )

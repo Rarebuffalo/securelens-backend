@@ -100,3 +100,48 @@ class ScheduledScanResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Nuclei Active Scan Schemas
+# ---------------------------------------------------------------------------
+
+class NucleiFinding(BaseModel):
+    template_id: str
+    name: str
+    severity: str
+    matched_at: str
+    description: str | None = None
+
+
+class NucleiResultResponse(BaseModel):
+    id: str
+    scan_result_id: str
+    url: str
+    findings: list[NucleiFinding]
+    # status: "completed" | "skipped" | "timeout" | "error"
+    status: str
+    completed_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# AI Remediation Plan Schemas
+# ---------------------------------------------------------------------------
+
+class RemediationStep(BaseModel):
+    priority: int
+    issue: str
+    severity: str
+    effort: str   # Easy | Medium | Hard
+    fix_summary: str
+    code_snippet: str | None = None
+
+
+class RemediationPlan(BaseModel):
+    summary: str
+    steps: list[RemediationStep]
+    estimated_total_effort: str
+
