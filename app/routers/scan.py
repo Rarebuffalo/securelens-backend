@@ -23,6 +23,7 @@ from app.services.scanner.ports import PortScanner
 from app.services.scoring import calculate_layer_statuses, calculate_score
 from app.services.ai import enhance_security_issues
 from app.services.threat_intel import get_threat_intel_summary
+from app.services.webhook_dispatcher import dispatch_webhooks
 from app.utils.validators import validate_url
 
 logger = logging.getLogger(__name__)
@@ -37,30 +38,6 @@ exposure_scanner = ExposureScanner()
 dns_scanner = DNSScanner()
 port_scanner = PortScanner()
 
-
-async def dispatch_webhooks(user_id: str, scan_data: dict, db_session):
-    import hmac, hashlib, json
-    from sqlalchemy import select
-    
-    result = await db_session.execute(
-        select(Webhook).where(Webhook.user_id == user_id, Webhook.is_active == True)
-    )
-    hooks = result.scalars().all()
-    if not hooks:
-        return
-
-    async with httpx.AsyncClient() as client:
-        payload = json.dumps(scan_data).encode("utf-8")
-        for hook in hooks:
-            headers = {"Content-Type": "application/json"}
-            if hook.secret_key:
-                sig = hmac.new(hook.secret_key.encode(), payload, hashlib.sha256).hexdigest()
-                headers["X-SecureLens-Signature"] = sig
-            
-            try:
-                await client.post(hook.target_url, content=payload, headers=headers, timeout=5.0)
-            except Exception as e:
-                logger.warning(f"Webhook {hook.target_url} failed: {e}")
 
 
 @router.post("/scan", response_model=ScanResponse)

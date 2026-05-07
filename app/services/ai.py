@@ -170,3 +170,40 @@ async def generate_threat_narrative(context_data: dict) -> str:
 
     result = await call_ai(prompt, temperature=0.7)
     return result or "Could not generate threat narrative."
+
+
+async def generate_diff_narrative(diff_data: dict) -> str:
+    """
+    Generates a plain-English summary of the changes between two scans.
+
+    Given the resolved, new, and persisting issues plus the score change,
+    the model writes a short paragraph explaining what improved, what
+    regressed, and what still needs attention — written for a developer
+    who wants to understand progress at a glance.
+    """
+    if not settings.effective_ai_key:
+        return "AI narration is disabled because no AI API key is configured."
+
+    score_change = diff_data.get("score_change", 0)
+    resolved = diff_data.get("resolved_issues", [])
+    new_issues = diff_data.get("new_issues", [])
+    persisting = diff_data.get("persisting_issues", [])
+
+    prompt = (
+        "You are SecureLens AI, a cybersecurity assistant. "
+        "A developer has run two security scans on the same URL at different points in time. "
+        "Here is the comparison between the two scans:\n\n"
+        f"Score change: {score_change:+d} points\n"
+        f"Issues resolved since last scan ({len(resolved)}): "
+        f"{json.dumps([i.get('issue') for i in resolved])}\n"
+        f"New issues found ({len(new_issues)}): "
+        f"{json.dumps([i.get('issue') for i in new_issues])}\n"
+        f"Issues still present ({len(persisting)}): "
+        f"{json.dumps([i.get('issue') for i in persisting])}\n\n"
+        "Write a short, plain-English summary (2-4 sentences) for the developer. "
+        "Mention what improved, flag any new regressions if they exist, and note what still needs work. "
+        "Be direct and practical — no fluff."
+    )
+
+    result = await call_ai(prompt, temperature=0.4)
+    return result or "Could not generate diff narrative."

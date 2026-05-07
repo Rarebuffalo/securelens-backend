@@ -17,9 +17,10 @@ from app.schemas.scan import (
     ChatResponse,
     ThreatNarrativeResponse,
     ScanDiffResponse,
+    ScheduledScanResponse,
 )
 
-from app.services.ai import chat_with_scan_context, generate_threat_narrative
+from app.services.ai import chat_with_scan_context, generate_threat_narrative, generate_diff_narrative
 
 router = APIRouter(prefix="/scans", tags=["history"])
 
@@ -198,7 +199,7 @@ async def diff_scans(
 ):
     result = await db.execute(
         select(ScanResult).where(
-            ScanResult.id.in_([old_id, new_id]), 
+            ScanResult.id.in_([old_id, new_id]),
             ScanResult.user_id == current_user.id
         )
     )
@@ -210,17 +211,28 @@ async def diff_scans(
     s_old = scans[0] if scans[0].id == old_id else scans[1]
     s_new = scans[1] if scans[1].id == new_id else scans[0]
 
-    # Convert to set-like structures using issue names
+    # Map issues by name for set-like comparison
     old_map = {i.get("issue"): i for i in s_old.issues}
     new_map = {i.get("issue"): i for i in s_new.issues}
 
     resolved = [v for k, v in old_map.items() if k not in new_map]
     new_issues = [v for k, v in new_map.items() if k not in old_map]
     persisting = [v for k, v in new_map.items() if k in old_map]
+    score_change = s_new.security_score - s_old.security_score
+
+    # Ask the AI to narrate the changes in plain English
+    diff_context = {
+        "score_change": score_change,
+        "resolved_issues": resolved,
+        "new_issues": new_issues,
+        "persisting_issues": persisting,
+    }
+    narrative = await generate_diff_narrative(diff_context)
 
     return ScanDiffResponse(
         resolved_issues=resolved,
         new_issues=new_issues,
         persisting_issues=persisting,
-        score_change=s_new.security_score - s_old.security_score
+        score_change=score_change,
+        narrative=narrative,
     )

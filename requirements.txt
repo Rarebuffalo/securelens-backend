@@ -17,7 +17,8 @@ alembic
 google-genai
 aiodns
 fpdf2
-# ---- Step 2: LiteLLM for provider-agnostic AI calls ----
+# ---- LiteLLM: provider-agnostic AI calls ----
 litellm
-# ---- Step 3: Threat Intelligence ----
-# (VirusTotal and AbuseIPDB are queried via httpx, no extra SDK needed)
+# ---- APScheduler: scheduled/recurring scans ----
+apscheduler
+# ---- Threat Intelligence (VirusTotal + AbuseIPDB via httpx, no extra SDK needed) ----

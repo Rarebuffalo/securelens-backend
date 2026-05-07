@@ -11,6 +11,8 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.middleware.rate_limiter import limiter
 from app.routers import auth, health, history, scan, apikey, report, code_scan
+from app.routers import scheduled_scans
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -24,7 +26,9 @@ async def lifespan(app: FastAPI):
     import app.models  # noqa: F401 — register models with Base.metadata
     await init_db()
     logger.info("Database initialized")
+    start_scheduler()
     yield
+    stop_scheduler()
     await close_db()
     logger.info("Database connection closed")
 
@@ -57,6 +61,7 @@ def create_app() -> FastAPI:
     application.include_router(apikey.router)
     application.include_router(report.router)
     application.include_router(code_scan.router)
+    application.include_router(scheduled_scans.router)
 
     logger.info(f"{settings.app_name} v{settings.app_version} initialized")
 

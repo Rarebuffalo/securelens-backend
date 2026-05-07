@@ -77,3 +77,26 @@ class ScanDiffResponse(BaseModel):
     new_issues: list[Issue]
     persisting_issues: list[Issue]
     score_change: int
+    # AI-generated plain-English summary of what changed between the two scans.
+    # None when the AI key is not configured.
+    narrative: str | None = None
+
+
+class ScheduledScanCreate(BaseModel):
+    url: str = Field(..., description="The URL to scan on a schedule")
+    schedule: str = Field(
+        "daily",
+        description="How often to run the scan. Options: 'daily', 'weekly'",
+    )
+
+
+class ScheduledScanResponse(BaseModel):
+    id: str
+    url: str
+    schedule: str
+    is_active: bool
+    last_run_at: datetime | None = None
+    last_score: int | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
