@@ -35,6 +35,65 @@ After the scan, you can open a live conversation with the agent about what it fo
 
 ---
 
+## Agentic Workflow Orchestration
+
+The code scanner is built as a multi-agent reasoning pipeline. Rather than sending the entire repository to an LLM in one shot and hoping for a useful response, it breaks the problem into three discrete stages, each with a focused responsibility. The terms for this kind of design are task decomposition and multi-agent reasoning — the system itself decides what to look at, coordinates parallel work, and synthesises the results.
+
+### The 3-Phase Pipeline
+
+```mermaid
+flowchart LR
+    A([GitHub Repository]) --> B
+
+    subgraph B ["Phase 1 — Triage"]
+        direction TB
+        B1["Fetch complete file tree from GitHub API"]
+        B2["LLM reads structure and selects\nhigh-risk files: auth, DB, config, secrets"]
+        B1 --> B2
+    end
+
+    B --> C
+
+    subgraph C ["Phase 2 — Concurrent Analysis"]
+        direction TB
+        C1["Task decomposition: each triaged\nfile becomes an independent task"]
+        C2["asyncio.gather() runs all tasks\nin parallel, semaphore-throttled"]
+        C3["Each agent checks its file against\nOWASP Top 10, returns structured JSON"]
+        C1 --> C2 --> C3
+    end
+
+    C --> D
+
+    subgraph D ["Phase 3 — Reasoning and Synthesis"]
+        direction TB
+        D1["Findings aggregated from all agents"]
+        D2["LLM writes executive summary:\nsecurity posture, critical risks, priorities"]
+        D1 --> D2
+    end
+
+    D --> E([Structured Security Report])
+```
+
+### How each phase works
+
+**Phase 1 — Triage.** The agent fetches the full file tree from GitHub and asks the LLM to do an initial scoping pass — the same judgment call a security engineer makes at the start of a code review. It returns a short list of files most likely to carry real risk: authentication handlers, database queries, config files, anything dealing with secrets. One focused API call replaces the need to blindly download and analyse every file in the repo.
+
+**Phase 2 — Concurrent analysis.** This is where task decomposition happens. Each file from the triage result becomes an independent job. They all run at the same time via `asyncio.gather()`, with a semaphore capping concurrency at 5 to stay within provider rate limits. Every agent sends its file's source code to the LLM with an OWASP Top 10 checklist and gets back structured JSON — severity, issue title, explanation, line number, suggested fix. The response is validated against a Pydantic schema before anything is stored.
+
+**Phase 3 — Synthesis.** Once all agents have reported back, the aggregated findings go to one final LLM call that writes an executive summary of the overall security posture. It looks across all the individual findings and produces something a developer or manager can actually act on.
+
+### Engineering decisions worth noting
+
+The orchestrator never calls the Gemini API directly. All AI calls go through `call_ai()`, a LiteLLM adapter. Swapping the underlying model is a config change, not a code change.
+
+Every agent call uses `json_mode=True` and enforces a fixed output schema. There is no string parsing involved — structured output goes straight into typed Pydantic models. If a call fails, the error is caught and logged and the rest of the pipeline continues.
+
+After the scan finishes, the full result is attached to a persistent chat session. Follow-up questions are answered with that context already loaded — the agent knows which files were scanned, what was found, and where. This is what makes it a stateful, multi-turn reasoning session rather than a one-shot query.
+
+The implementation is in `app/services/code_scanner/orchestrator.py`.
+
+---
+
 ## What This Backend Covers
 
 **GitHub Code Scanner**
