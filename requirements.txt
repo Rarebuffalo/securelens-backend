@@ -22,3 +22,8 @@ litellm
 # ---- APScheduler: scheduled/recurring scans ----
 apscheduler
 # ---- Threat Intelligence (VirusTotal + AbuseIPDB via httpx, no extra SDK needed) ----
+# ---- SecureLens CLI deps ----
+rich
+pyyaml
+pathspec
+questionary
