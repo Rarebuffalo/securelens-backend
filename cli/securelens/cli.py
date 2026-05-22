@@ -179,9 +179,12 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai):
             "[2/4] Triaging with AI...", total=None, detail=""
         )
         if no_ai:
-            # In --no-ai mode just take the top N by sensitivity heuristic
+            # In --no-ai mode: take sensitive files first, then fill the budget
+            # with remaining files sorted by name so we always return something.
             from securelens.scanners import _is_always_scan
-            triaged = [p for p in candidates if _is_always_scan(p)][:cfg.max_files_to_scan]
+            sensitive = [p for p in candidates if _is_always_scan(p)]
+            others = [p for p in candidates if not _is_always_scan(p)]
+            triaged = (sensitive + others)[:cfg.max_files_to_scan]
         else:
             triaged = await triage_files(candidates, root, cfg)
         progress.update(task_triage, completed=100, total=100,
@@ -236,15 +239,14 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai):
 
     if fmt in ("terminal", "all"):
         print_code_scan_report(result)
-    if fmt in ("json",):
+    if fmt == "json":
+        # json mode: print to stdout only — good for piping / CI
         console.print(to_json(result, "code"))
+        return  # skip REPL in pure JSON mode
     if fmt in ("markdown", "all"):
         path_out = save_markdown(result, "code")
         if not ci:
             console.print(f"  [green]✓ Markdown report saved:[/green] [dim]{path_out}[/dim]\n")
-    if fmt == "json" and not ci:
-        path_out = save_json(result, "code")
-        console.print(f"  [green]✓ JSON report saved:[/green] [dim]{path_out}[/dim]\n")
 
     # ── CI exit code ─────────────────────────────────────────────────────────
     if ci:
@@ -272,7 +274,8 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai):
               type=click.Choice(["terminal", "json", "markdown", "all"]))
 @click.option("--ci",      is_flag=True, help="CI mode — no REPL")
 @click.option("--fail-on", default=None,
-              type=click.Choice(["critical", "warning", "info"]))
+              type=click.Choice(["critical", "high", "medium", "low"]),
+              help="Exit 1 if issues of this severity or above are found")
 @click.option("--no-ai",   is_flag=True, help="Skip AI summary")
 def web(url, model, output, ci, fail_on, no_ai):
     """
@@ -334,7 +337,9 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
     if fmt in ("terminal", "all"):
         print_web_scan_report(result)
     if fmt == "json":
+        # json mode: print to stdout only — good for piping / CI
         console.print(to_json(result, "web"))
+        return  # skip REPL in pure JSON mode
     if fmt in ("markdown", "all"):
         p = save_markdown(result, "web")
         if not ci:
