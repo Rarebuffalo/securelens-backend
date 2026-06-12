@@ -1,221 +1,124 @@
-# SecureLens AI — Backend
+<!-- SPDX-FileCopyrightText: 2026 Ai-chan-0411 <aoikabu12@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Apoorv Garg <apoorvgarg.21@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Aryan Iyappan <aryaniyappan2006@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Subramania Raja <dhanpraja231@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Hari Srinivasan <harisrini21@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Hemalatha Madeswaran <hemalathamadeswaran@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Kaushik Kumar <kaushikrjpm10@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Lokesh Selvam <lokeshselvam7025@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Naraen Rammoorthi <naraen13@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Shaan Narendran <shaannaren06@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Shreem Seth <shreemseth26@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 DoomsCoder <vedantkakade05@gmail.com> -->
+<!-- SPDX-FileCopyrightText: 2026 Vishnu Muthiah <vishnu.muthiah04@gmail.com> -->
+<!-- SPDX-License-Identifier: MIT -->
 
-SecureLens is an AI security agent that connects directly to your GitHub repositories and autonomously hunts for security vulnerabilities in your source code. It does not scan randomly — it reasons about your codebase the same way a security engineer would: reads the file structure, identifies which files carry the most risk, and focuses its analysis where it actually matters.
+<pre align="center">
+ ██████╗███████╗ ██████╗██╗   ██╗██████╗ ███████╗██╗     ███████╗███╗   ██╗███████╗
+██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔════╝██║     ██╔════╝████╗  ██║██╔════╝
+╚█████╗ █████╗  ██║     ██║   ██║██████╔╝█████╗  ██║     █████╗  ██╔██╗ ██║███████╗
+ ╚═══██╗██╔══╝  ██║     ██║   ██║██╔══██╗██╔══╝  ██║     ██╔══╝  ██║╚██╗██║╚════██║
+██████╔╝███████╗╚██████╗╚██████╔╝██║  ██║███████╗███████╗███████╗██║ ╚████║███████║
+╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
+</pre>
 
-The agent integrates with GitHub via a **Personal Access Token (PAT)**, giving it read access to any repository you point it at — public or private. The intelligence layer is powered by the **Google Gemini API** (`gemini-2.0-flash`), which is used for three separate reasoning tasks: prioritising which files to investigate, performing deep security analysis of each file's source code against the OWASP Top 10, and maintaining a contextual chat session so you can ask follow-up questions and request patches for specific issues.
+<p align="center">
+  <b>An AI-native AppSec agent and local security auditor. Autonomously triage and scan codebases against the OWASP Top 10, probe live web infrastructure, generate threat narratives, and engage in interactive triage chat sessions directly from your terminal or CI/CD pipelines.</b>
+</p>
 
-Beyond code scanning, SecureLens also performs infrastructure-level security analysis on live URLs — checking headers, SSL configuration, cookie security, and sensitive path exposure — scoring each target out of 100 and generating an AI-written threat narrative explaining how an attacker could chain the findings together.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/python-3.12+-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/FastAPI-0.109+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Docker-Supported-2496ed?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/LLM-Multi--Provider-8a2be2?style=flat-square" alt="LLM Provider">
+</p>
 
 ---
 
-## Documentation
+## Table of Contents
 
-Detailed technical documentation lives in the [`docs/`](./docs/) folder:
-
-| Doc | Description |
-|---|---|
-| [docs/ai-agent.md](./docs/ai-agent.md) | How the AI agent pipeline works — triage, concurrent analysis, chat context |
-| [docs/architecture.md](./docs/architecture.md) | Full system architecture and request flow diagrams |
-| [docs/api-reference.md](./docs/api-reference.md) | Every endpoint, request/response shape, and error codes |
-
----
-
-## How It Works
-
-SecureLens runs a three-phase agentic pipeline when you trigger a code scan:
-
-**Phase 1 — Triage**
-The agent fetches the complete file tree from your repository and sends it to Gemini. The model acts as a senior AppSec engineer — it reads the file paths, understands the structure, and selects the files most likely to contain vulnerabilities (auth routes, database queries, API handlers, config files). This is one targeted API call, not a blind scan of everything.
-
-**Phase 2 — Concurrent Analysis**
-The agent fetches the source code for each prioritised file from GitHub and sends them all to Gemini simultaneously for deep security analysis. Each file is checked against the OWASP Top 10 — SQL injection, XSS, hardcoded secrets, IDOR, broken access control, misconfigurations, and more. Results come back with severity ratings, affected line numbers, explanations, and specific code fixes.
-
-**Phase 3 — Context-Aware Chat**
-After the scan, you can open a live conversation with the agent about what it found. The agent has full context of the scan results — it knows which files were checked, what vulnerabilities were found, and at which lines. Ask it to write a patch, explain an issue in plain English, or prioritise what to fix first.
+- [Core Capabilities](#core-capabilities)
+- [How It Works (Multi-Agent Pipeline)](#how-it-works-multi-agent-pipeline)
+- [Quick Start](#quick-start)
+  - [1. Deploy Backend Server](#1-deploy-backend-server)
+  - [2. Install Local CLI](#2-install-local-cli)
+  - [3. Configure CLI](#3-configure-cli)
+- [CLI Command Guide](#cli-command-guide)
+  - [Scan Codebases](#scan-codebases)
+  - [Audit Web Infrastructure](#audit-web-infrastructure)
+  - [Interactive Triage REPL](#interactive-triage-repl)
+- [Supported Providers](#supported-providers)
+- [API Endpoints Summary](#api-endpoints-summary)
+- [Architecture & Tech Stack](#architecture--tech-stack)
+- [Roadmap](#roadmap)
+- [License](#license)
 
 ---
 
-## Agentic Workflow Orchestration
+## Core Capabilities
 
-The code scanner is built as a multi-agent reasoning pipeline. Rather than sending the entire repository to an LLM in one shot and hoping for a useful response, it breaks the problem into three discrete stages, each with a focused responsibility. The terms for this kind of design are task decomposition and multi-agent reasoning — the system itself decides what to look at, coordinates parallel work, and synthesises the results.
+SecureLens provides a dual-component security environment to verify application safety at the code level and infrastructure level:
 
-### The 3-Phase Pipeline
+* **Autonomous Code Auditor:** Rather than scanning blindly, SecureLens acts like an AppSec engineer. It triages repositories to locate high-risk files (auth handlers, DB layers, configs), performs concurrent OWASP Top 10 analysis, and synthesizes findings into actionable remediation guidance.
+* **Web Infrastructure Prober:** Run deep probes on live URLs checking 30+ parameters across SSL/TLS strength, Cookie flags, transport policies, and exposure vectors. It computes an overall security score and uses AI to write a threat chain narrative showing how attackers might combine weaknesses.
+* **Interactive CLI Companion:** Work locally with custom ignore filters, offline signature checks, local PDF report compiles, and direct synchronization of findings back to the server console.
+
+---
+
+## How It Works (Multi-Agent Pipeline)
+
+SecureLens runs a decomposed three-phase orchestrator to ensure highly targeted, context-aware analysis:
 
 ```mermaid
-flowchart LR
-    A([GitHub Repository]) --> B
-
-    subgraph B ["Phase 1 — Triage"]
-        direction TB
-        B1["Fetch complete file tree from GitHub API"]
-        B2["LLM reads structure and selects\nhigh-risk files: auth, DB, config, secrets"]
+flowchart TD
+    A([Target Codebase]) --> B[Phase 1: Triage]
+    
+    subgraph B ["Phase 1: Triage"]
+        B1["Fetch file tree / list local paths"]
+        B2["LLM isolates high-risk files\n(auth, db, configurations)"]
         B1 --> B2
     end
-
-    B --> C
-
-    subgraph C ["Phase 2 — Concurrent Analysis"]
-        direction TB
-        C1["Task decomposition: each triaged\nfile becomes an independent task"]
-        C2["asyncio.gather() runs all tasks\nin parallel, semaphore-throttled"]
-        C3["Each agent checks its file against\nOWASP Top 10, returns structured JSON"]
+    
+    B --> C[Phase 2: Concurrent Analysis]
+    
+    subgraph C ["Phase 2: Concurrent Analysis"]
+        C1["Decompose tasks into individual jobs"]
+        C2["Run asyncio.gather() throttled\nvia rate-limiting Semaphores"]
+        C3["Perform OWASP Top 10 auditing\nand return structured Pydantic schema"]
         C1 --> C2 --> C3
     end
-
-    C --> D
-
-    subgraph D ["Phase 3 — Reasoning and Synthesis"]
-        direction TB
-        D1["Findings aggregated from all agents"]
-        D2["LLM writes executive summary:\nsecurity posture, critical risks, priorities"]
-        D1 --> D2
+    
+    C --> D[Phase 3: Synthesis & REPL]
+    
+    subgraph D ["Phase 3: Synthesis & REPL"]
+        D1["Aggregate multi-agent findings"]
+        D2["Compile overall security score\nand exportable PDF report"]
+        D3["Launch interactive Q&A REPL\nfor follow-up patches"]
+        D1 --> D2 --> D3
     end
-
-    D --> E([Structured Security Report])
-```
-
-### How each phase works
-
-**Phase 1 — Triage.** The agent fetches the full file tree from GitHub and asks the LLM to do an initial scoping pass — the same judgment call a security engineer makes at the start of a code review. It returns a short list of files most likely to carry real risk: authentication handlers, database queries, config files, anything dealing with secrets. One focused API call replaces the need to blindly download and analyse every file in the repo.
-
-**Phase 2 — Concurrent analysis.** This is where task decomposition happens. Each file from the triage result becomes an independent job. They all run at the same time via `asyncio.gather()`, with a semaphore capping concurrency at 5 to stay within provider rate limits. Every agent sends its file's source code to the LLM with an OWASP Top 10 checklist and gets back structured JSON — severity, issue title, explanation, line number, suggested fix. The response is validated against a Pydantic schema before anything is stored.
-
-**Phase 3 — Synthesis.** Once all agents have reported back, the aggregated findings go to one final LLM call that writes an executive summary of the overall security posture. It looks across all the individual findings and produces something a developer or manager can actually act on.
-
-### Engineering decisions worth noting
-
-The orchestrator never calls the Gemini API directly. All AI calls go through `call_ai()`, a LiteLLM adapter. Swapping the underlying model is a config change, not a code change.
-
-Every agent call uses `json_mode=True` and enforces a fixed output schema. There is no string parsing involved — structured output goes straight into typed Pydantic models. If a call fails, the error is caught and logged and the rest of the pipeline continues.
-
-After the scan finishes, the full result is attached to a persistent chat session. Follow-up questions are answered with that context already loaded — the agent knows which files were scanned, what was found, and where. This is what makes it a stateful, multi-turn reasoning session rather than a one-shot query.
-
-The implementation is in `app/services/code_scanner/orchestrator.py`.
-
----
-
-## What This Backend Covers
-
-**GitHub Code Scanner**
-- Connects to any GitHub repo via Personal Access Token
-- AI-driven file triage — the agent decides what to read, not a keyword filter
-- Concurrent SAST analysis across prioritised files
-- OWASP Top 10 coverage: SQLi, XSS, IDOR, hardcoded secrets, broken auth, misconfigs
-- Severity-rated findings with line numbers and suggested fixes
-- Persistent scan context for multi-turn AI chat
-
-**Website URL Scanner**
-- 30+ checks across 5 security layers (transport, SSL/TLS, headers, cookies, exposure)
-- Security score (0–100) and letter grade (A–F)
-- AI-enhanced explanations and remediation snippets per finding
-- AI-generated Threat Narrative — attack chain reasoning across multiple findings
-- Scan history saved per user account
-
-**Platform**
-- JWT-based authentication (register, login, token-secured endpoints)
-- Rate limiting and SSRF protection on all scan inputs
-- Full scan history (list, retrieve, delete)
-- Interactive API docs at `/docs`
-
----
-
-## Security Layers Modeled
-
-SecureLens structures vulnerabilities into 5 logical layers with **30+ security checks**:
-
-| Layer               | Checks | Purpose                                        |
-| ------------------- | ------ | ---------------------------------------------- |
-| Transport Layer     | 6      | HTTPS, HSTS analysis, mixed content prevention |
-| SSL/TLS Layer       | 5      | Certificate expiry, TLS version, chain issues  |
-| Server Config Layer | 14     | Security headers, CSP analysis, info disclosure|
-| Cookie Security     | 4      | HttpOnly, Secure, SameSite flags               |
-| Exposure Layer      | 25+    | Sensitive paths, robots.txt, directory listing  |
-
----
-
-## Tech Stack
-
-- **Python 3.12+**
-- **FastAPI** — async web framework
-- **httpx** — async HTTP client (GitHub API + live URL scanning)
-- **SQLAlchemy 2.0** — async ORM
-- **Pydantic v2** — data validation and settings management
-- **google-genai** — Google Gemini AI SDK (code analysis, chat, AI enhancements)
-- **python-jose** — JWT authentication
-- **passlib + bcrypt** — password hashing
-- **SlowAPI** — rate limiting
-- **Docker + PostgreSQL** — containerized deployment
-- **pytest** — testing
-
----
-
-## Project Structure
-
-```
-securelens-backend/
-├── docs/
-│   ├── README.md               # Docs index
-│   ├── ai-agent.md             # How the AI agent pipeline works
-│   ├── architecture.md         # Full system architecture
-│   └── api-reference.md        # All endpoints documented
-├── app/
-│   ├── main.py                 # FastAPI app + middleware + lifespan
-│   ├── config.py               # Pydantic settings (.env)
-│   ├── database.py             # Async SQLAlchemy engine & session
-│   ├── models/
-│   │   ├── user.py             # User ORM model
-│   │   └── scan.py             # ScanResult ORM model
-│   ├── schemas/
-│   │   ├── auth.py             # Auth request/response models
-│   │   ├── scan.py             # Website scan models
-│   │   └── code_scan.py        # Code scan + chat models
-│   ├── routers/
-│   │   ├── auth.py             # Register, login, me
-│   │   ├── health.py           # Health check endpoints
-│   │   ├── scan.py             # Website scan endpoint
-│   │   ├── history.py          # Scan history endpoints
-│   │   └── code_scan.py        # GitHub repo scan + AI chat
-│   ├── services/
-│   │   ├── ai.py               # Website scanner AI layer (Gemini)
-│   │   ├── scoring.py          # Security scoring engine
-│   │   ├── scanner/            # Website scanner (5 check layers)
-│   │   │   ├── transport.py
-│   │   │   ├── ssl_checker.py
-│   │   │   ├── headers.py
-│   │   │   ├── cookies.py
-│   │   │   └── exposure.py
-│   │   └── code_scanner/       # GitHub repo AI agent
-│   │       ├── orchestrator.py # 3-phase AI pipeline
-│   │       └── github_client.py# GitHub API client
-│   ├── middleware/
-│   │   ├── auth.py             # JWT auth dependencies
-│   │   └── rate_limiter.py     # SlowAPI rate limiting
-│   └── utils/
-│       ├── auth.py             # JWT & password utilities
-│       └── validators.py       # URL validation & SSRF prevention
-├── tests/
-│   ├── conftest.py
-│   ├── test_auth.py
-│   ├── test_scan.py
-│   ├── test_history.py
-│   └── ...
-├── migrations/                 # Alembic database migrations
-├── main.py                     # Root entry point
-├── .env.example
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
+    
+    D --> E([Final Verified Audit])
 ```
 
 ---
 
-## Installation
+## Quick Start
 
-### Local Development (SQLite)
+SecureLens consists of a **central backend server** (managing scans, JWT authentication, and historical tracking) and an **interactive CLI tool**.
 
+### 1. Deploy Backend Server
+
+#### Standard Docker Compose (Recommended)
+Launch the server along with PostgreSQL instantly:
 ```bash
-git clone https://github.com/Rarebuffalo/securelens-backend
+cp .env.example .env
+docker compose up --build
+```
+
+#### Manual Development Setup (SQLite)
+```bash
+git clone https://github.com/Rarebuffalo/securelens-backend.git
 cd securelens-backend
 python -m venv venv
 source venv/bin/activate
@@ -223,139 +126,144 @@ pip install -r requirements.txt
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
+*The dev server defaults to `http://127.0.0.1:8000`. Database is automatically initialized.*
 
-The database is auto-created as `securelens.db` on first run.
+### 2. Install Local CLI
 
-### Docker (with PostgreSQL)
-
+Install the `securelens` CLI globally or inside your workspace virtual environment:
 ```bash
-cp .env.example .env
-docker compose up --build
+# Execute the automated installer script
+chmod +x cli/install.sh
+./cli/install.sh
+
+# Activate environment to use the tool
+source venv/bin/activate
 ```
+
+Alternatively, install in editable mode:
+```bash
+pip install -e cli/
+```
+
+### 3. Configure CLI
+
+Initiate configuration with the interactive wizard to set up API keys and point to your server:
+```bash
+securelens configure
+```
+This saves credentials, preferred models, and settings to your local profile at `~/.securelens/config.yaml`.
 
 ---
 
-## Configuration
+## CLI Command Guide
 
-Copy `.env.example` to `.env` and set your values:
+### Scan Codebases
 
-| Variable              | Default                                    | Description                       |
-| --------------------- | ------------------------------------------ | --------------------------------- |
-| `APP_NAME`            | SecureLens AI                              | Application name                  |
-| `APP_VERSION`         | 1.0.0                                      | Application version               |
-| `DEBUG`               | true                                       | Enable debug mode & docs          |
-| `HOST`                | 0.0.0.0                                    | Server host                       |
-| `PORT`                | 8000                                       | Server port                       |
-| `CORS_ORIGINS`        | http://localhost:3000,http://localhost:5173 | Allowed CORS origins              |
-| `RATE_LIMIT`          | 30/minute                                  | API rate limit                    |
-| `SCAN_TIMEOUT`        | 5                                          | HTTP request timeout (seconds)    |
-| `PATH_CHECK_TIMEOUT`  | 3                                          | Sensitive path check timeout (s)  |
-| `DATABASE_URL`        | sqlite+aiosqlite:///./securelens.db        | Database connection string        |
-| `JWT_SECRET`          | (change in production!)                    | Secret key for JWT signing        |
-| `JWT_ALGORITHM`       | HS256                                      | JWT signing algorithm             |
-| `JWT_EXPIRY_MINUTES`  | 1440                                       | Token expiry (default: 24h)       |
-| `GEMINI_API_KEY`      | (required for AI features)                 | Google Gemini API key             |
+Analyze local codebases. SecureLens automatically triages your file tree, ignoring builds/artifacts, runs the selected model, and drops you into a chat.
 
-Get a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Without it, the app still works but all AI-powered features (code scanning, AI chat, AI enhancements) are disabled.
+```bash
+securelens scan .                              # Scan current folder
+securelens scan ./project                      # Scan specific directory
+securelens scan . --model gpt-4o               # Specify model override
+securelens scan . --no-ai                      # Run lightning-fast offline regex pattern scan
+securelens scan . --sync                       # Upload scan results automatically to backend
+securelens scan . --ci --fail-on high          # CI pipeline mode: exits with non-zero on High vulnerabilities
+```
+
+### Audit Web Infrastructure
+
+Probe a live target website for transport layer security, configurations, and header exposure.
+
+```bash
+securelens web https://example.com             # Scan target URL
+securelens web https://my-app.com --no-ai      # Raw scanner check without AI summary
+securelens web https://my-app.com --output md  # Save results to markdown file
+```
+
+### Interactive Triage REPL
+
+When running a code scan, SecureLens starts an interactive terminal shell (REPL) allowing you to query vulnerability details and export findings.
+
+```text
+Ask a follow-up (or press Ctrl+C to exit)
+Type /help for available commands
+
+> Explain the SQL injection found in db.py and write a patch
+> Which files have critical severity issues?
+> /files
+> /export pdf
+> /exit
+```
+
+#### Supported REPL Slash Commands
+* `/help` — Display CLI commands helper
+* `/files` — List files selected for AI triage
+* `/score` — Print the current codebase security grade (A-F)
+* `/export markdown` — Save audit to markdown report
+* `/export pdf` — Compile styled PDF audit document locally
+* `/model <name>` — Switch AI models mid-session
+* `/exit` — Terminate the interactive REPL
 
 ---
 
-## API Endpoints
+## Supported Providers
 
-### Health
+SecureLens leverages [LiteLLM](https://github.com/BerriAI/litellm) under the hood. You can configure any model matching your credential flags:
 
-| Method | Endpoint   | Description      |
-| ------ | ---------- | ---------------- |
-| GET    | `/`        | Welcome message  |
-| GET    | `/health`  | App status       |
-
-### Authentication
-
-| Method | Endpoint          | Description               | Auth |
-| ------ | ----------------- | ------------------------- | ---- |
-| POST   | `/auth/register`  | Create account + get token| No   |
-| POST   | `/auth/login`     | Login + get token         | No   |
-| GET    | `/auth/me`        | Get current user info     | Yes  |
-
-### Code Scanner (AI Agent)
-
-| Method | Endpoint                | Description                                      | Auth     |
-| ------ | ----------------------- | ------------------------------------------------ | -------- |
-| POST   | `/code-scan/analyze`    | Run AI agent against a GitHub repo               | No       |
-| POST   | `/code-scan/chat`       | Chat with AI about a specific scan's results     | No       |
-| GET    | `/code-scan/models`     | List available Gemini models for your API key    | No       |
-
-### Website Scanner
-
-| Method | Endpoint         | Description                          | Auth     |
-| ------ | ---------------- | ------------------------------------ | -------- |
-| POST   | `/scan`          | Scan a URL (saves if authenticated)  | Optional |
-
-### Scan History
-
-| Method | Endpoint          | Description               | Auth |
-| ------ | ----------------- | ------------------------- | ---- |
-| GET    | `/scans`          | List your scan history    | Yes  |
-| GET    | `/scans/{id}`     | Get scan details by ID    | Yes  |
-| DELETE | `/scans/{id}`     | Delete a scan             | Yes  |
-
-### Example Usage
-
-**Scan a GitHub Repo (AI Agent):**
-```bash
-curl -X POST http://127.0.0.1:8000/code-scan/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"repo_url": "https://github.com/user/repo", "github_token": "ghp_xxx", "branch": "main"}'
-```
-
-**Chat with the scan:**
-```bash
-curl -X POST http://127.0.0.1:8000/code-scan/chat \
-  -H "Content-Type: application/json" \
-  -d '{"scan_id": "<scan_id from above>", "message": "Write a patch for the highest severity issue"}'
-```
-
-**Scan a URL:**
-```bash
-curl -X POST http://127.0.0.1:8000/scan \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"url": "https://example.com"}'
-```
-
-**Register:**
-```bash
-curl -X POST http://127.0.0.1:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "username": "myuser", "password": "securepass123"}'
-```
+| Provider | Model Identifier | Config Required |
+|---|---|---|
+| **Google Gemini (Default)** | `gemini/gemini-2.0-flash` | `GEMINI_API_KEY` |
+| **OpenAI** | `gpt-4o`, `gpt-4o-mini` | `OPENAI_API_KEY` |
+| **Anthropic** | `claude-3-5-sonnet-latest`, `claude-3-5-haiku-20241022` | `ANTHROPIC_API_KEY` |
+| **Ollama** | `ollama/llama3.1` | Run local Ollama server |
 
 ---
 
-## Running Tests
+## API Endpoints Summary
 
-```bash
-pytest tests/ -v
-```
+Interact with the server via the standard REST endpoints or use the interactive documentation at `/docs`:
 
-Tests use an in-memory SQLite database — no external DB needed.
+| Area | Method | Route | Description | Auth |
+|---|---|---|---|---|
+| **System** | `GET` | `/health` | Verify server status | No |
+| **Auth** | `POST` | `/auth/register` | Register new profile | No |
+| **Auth** | `POST` | `/auth/login` | Retrieve access token | No |
+| **Code Scan** | `POST` | `/code-scan/analyze` | Trigger Git repository triage & audit | Yes |
+| **Code Scan** | `POST` | `/code-scan/sync` | Sync local scanner results to database | Yes |
+| **Code Scan** | `POST` | `/code-scan/chat` | Continue chat discussion about code scan | Yes |
+| **Web Scan** | `POST` | `/scan` | Audit a URL's network security | Optional |
+| **History** | `GET` | `/scans` | List historical scan records | Yes |
+| **History** | `DELETE` | `/scans/{id}` | Purge a scan record from DB | Yes |
 
 ---
 
-## Future Roadmap
+## Architecture & Tech Stack
 
-- **Multi-LLM support** — swap out the AI provider via config. Planned support for OpenAI, Anthropic Claude, Mistral, and self-hosted models (Ollama), so you are not locked into any single API key or vendor
-- **CI/CD integration** — run SecureLens as part of your deployment pipeline (GitHub Actions, GitLab CI, etc.) to automatically scan every pull request or deployment for new vulnerabilities before they hit production
-- Persistent chat history (store code scan results in PostgreSQL)
-- PDF report generation for code scan results
-- DNS security checks (SPF, DKIM, DMARC)
-- Technology fingerprinting
-- JavaScript library CVE detection via package.json analysis
+SecureLens uses a modern, lightweight async tech stack:
+
+* **Backend Engine:** Python 3.12+, FastAPI, SQLAlchemy 2.0 (Async DB support), Pydantic v2.
+* **Database Layer:** PostgreSQL (Docker production deployment) / SQLite (Aiosqlite for local development).
+* **AI Adapter:** LiteLLM provider client with structured JSON parsing constraints.
+* **CLI Utility:** Click (CLI parser), Rich (terminal style/color engine), PyYAML.
+* **Local Exporters:** FPDF2 (PDF generation).
+
+---
+
+## Roadmap
+
+* [x] **Local Offline Scanner** — Execute regex-based pattern scans on offline environments.
+* [x] **Terminal PDF Generation** — Native local PDF output via CLI.
+* [x] **Server Synchronisation** — Push local CLI findings to central PostgreSQL dashboards.
+* [ ] **CI/CD Integration Packages** — Dedicated GitHub Actions and GitLab Runner wrappers.
+* [ ] **Dependency Audit (`securelens audit`)** — Check packages against the OSV DB.
+* [ ] **Automated Patches (Git MRs)** — Generate Git PRs directly from CLI fixes.
 
 ---
 
 ## License
 
-This project is open-source and available under the **MIT License**.
+This repository is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
-Happy Hacking! 🛡️
+---
+
+*Happy Hacking! Keep your codebases secure.*
