@@ -21,12 +21,16 @@ class CLIConfig:
     default_model: str = "gemini/gemini-2.0-flash"
     api_key: str = ""
 
+    # Backend Integration (for sync / auth)
+    backend_url: str = "http://localhost:8000"
+    token: str = ""
+
     # Scan behaviour
     output_format: str = "terminal"          # terminal | json | markdown | all
     max_files_to_scan: int = 20
     max_file_size_kb: int = 200
     scan_timeout: int = 10                   # seconds — for web scans
-
+    
     # File exclusions (gitignore-style globs)
     ignore_patterns: list = field(default_factory=lambda: [
         "*.lock",
@@ -57,6 +61,8 @@ def load_config() -> CLIConfig:
             data = yaml.safe_load(f) or {}
         cfg.default_model = data.get("default_model", cfg.default_model)
         cfg.api_key = data.get("api_key", cfg.api_key)
+        cfg.backend_url = data.get("backend_url", cfg.backend_url)
+        cfg.token = data.get("token", cfg.token)
         cfg.output_format = data.get("output_format", cfg.output_format)
         cfg.max_files_to_scan = data.get("max_files_to_scan", cfg.max_files_to_scan)
         cfg.max_file_size_kb = data.get("max_file_size_kb", cfg.max_file_size_kb)
@@ -86,6 +92,8 @@ def save_config(cfg: CLIConfig) -> None:
     data = {
         "default_model": cfg.default_model,
         "api_key": cfg.api_key,
+        "backend_url": cfg.backend_url,
+        "token": cfg.token,
         "output_format": cfg.output_format,
         "max_files_to_scan": cfg.max_files_to_scan,
         "max_file_size_kb": cfg.max_file_size_kb,
