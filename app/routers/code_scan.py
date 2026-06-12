@@ -40,6 +40,7 @@ from app.schemas.code_scan import (
     VulnerabilityIssue,
     CodeScanHistoryItem,
     CodeScanHistoryResponse,
+    CodeScanSyncRequest,
 )
 from app.services.code_scanner.orchestrator import CodeScanOrchestrator
 from app.config import settings
@@ -297,3 +298,35 @@ async def list_available_models():
         return {"models": models}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching models: {e}")
+
+
+@router.post("/code-scan/sync", response_model=CodeScanResponse)
+async def sync_codebase_scan(
+    request: CodeScanSyncRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    """
+    Synchronize a locally performed codebase scan with the central database.
+    """
+    logger.info(f"Syncing local code scan for {request.repo_url}")
+    try:
+        issues_as_dicts = [v.model_dump() for v in request.issues]
+        scan_record = CodeScanResult(
+            user_id=current_user.id if current_user else None,
+            repo_url=request.repo_url,
+            summary=request.summary,
+            issues=issues_as_dicts,
+        )
+        db.add(scan_record)
+        await db.flush()
+        return CodeScanResponse(
+            scan_id=scan_record.id,
+            repo_url=request.repo_url,
+            summary=request.summary,
+            issues=request.issues,
+            created_at=scan_record.created_at,
+        )
+    except Exception as e:
+        logger.error(f"Sync codebase scan failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
