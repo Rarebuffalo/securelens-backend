@@ -12,7 +12,13 @@ logger = logging.getLogger(__name__)
 
 class DNSScanner:
     def __init__(self):
-        self.resolver = aiodns.DNSResolver(timeout=3.0)
+        self._resolver = None
+
+    @property
+    def resolver(self):
+        if self._resolver is None:
+            self._resolver = aiodns.DNSResolver(timeout=3.0)
+        return self._resolver
 
     async def scan(self, url: str) -> list[Issue]:
         issues = []
