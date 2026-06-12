@@ -37,6 +37,7 @@ HELP_TEXT = """
   [bold]/issues critical[/bold]   Filter issues by severity (critical/high/medium/low)
   [bold]/export markdown[/bold]   Save the report as a Markdown file
   [bold]/export json[/bold]       Save the report as a JSON file
+  [bold]/export pdf[/bold]        Save the report as a PDF file
   [bold]/model <name>[/bold]      Switch AI model (e.g. /model gpt-4o-mini)
   [bold]/clear[/bold]             Clear the terminal
   [bold]/exit[/bold]              Exit the REPL
@@ -233,6 +234,10 @@ async def _handle_slash_command(cmd: str, ctx: ReplContext) -> bool:
         if fmt == "json":
             path = save_json(ctx.scan_result, target_type)
             console.print(f"\n  [bold green]✓ JSON report saved:[/bold green] [dim]{path}[/dim]\n")
+        elif fmt == "pdf":
+            from securelens.output.exporters import save_pdf
+            path = save_pdf(ctx.scan_result, target_type)
+            console.print(f"\n  [bold green]✓ PDF report saved:[/bold green] [dim]{path}[/dim]\n")
         else:
             path = save_markdown(ctx.scan_result, target_type)
             console.print(f"\n  [bold green]✓ Markdown report saved:[/bold green] [dim]{path}[/dim]\n")
