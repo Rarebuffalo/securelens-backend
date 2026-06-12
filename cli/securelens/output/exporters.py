@@ -146,3 +146,14 @@ def save_markdown(result, target_type: str = "code") -> Path:
     path = Path(f"securelens-report-{ts}.md")
     path.write_text(to_markdown(result, target_type))
     return path
+
+
+def save_pdf(result, target_type: str = "code") -> Path:
+    from securelens.output.pdf import export_code_pdf, export_web_pdf
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = Path(f"securelens-report-{ts}.pdf")
+    if target_type == "code":
+        export_code_pdf(result, str(path))
+    else:
+        export_web_pdf(result, str(path))
+    return path
