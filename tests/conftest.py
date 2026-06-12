@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -28,7 +29,7 @@ async def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def setup_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -43,14 +44,14 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_user():
     async with TestSessionLocal() as session:
         user = User(
@@ -64,7 +65,7 @@ async def test_user():
         return user
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def auth_headers(test_user):
     token = create_access_token(test_user.id)
     return {"Authorization": f"Bearer {token}"}
