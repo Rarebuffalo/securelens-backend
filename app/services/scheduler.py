@@ -37,7 +37,19 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 import httpx
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+except ImportError:
+    class AsyncIOScheduler:
+        def __init__(self, *args, **kwargs):
+            self.running = False
+        def add_job(self, *args, **kwargs):
+            pass
+        def start(self):
+            pass
+        def shutdown(self, *args, **kwargs):
+            pass
+
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
