@@ -23,6 +23,11 @@ class CodeScanResponse(BaseModel):
     issues: List[VulnerabilityIssue]
     created_at: Optional[datetime] = None
 
+class CodeScanSyncRequest(BaseModel):
+    repo_url: str
+    summary: str
+    issues: List[VulnerabilityIssue]
+
 class CodeChatRequest(BaseModel):
     scan_id: str
     message: str
