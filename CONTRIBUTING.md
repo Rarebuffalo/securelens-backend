@@ -6,7 +6,15 @@ Welcome to SecureLens! We appreciate your interest in contributing to the projec
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our Code of Conduct. Please read `CODE_OF_CONDUCT.md` to understand the expectations we have for community members.
+By participating in this project, you agree to abide by our Code of Conduct. Please read [CODE_OF_CONDUCT.md](file:///home/Krishna-Singh/securelens-backend/CODE_OF_CONDUCT.md) to understand the expectations we have for community members.
+
+---
+
+## Where to Start?
+
+If you are a first-time contributor or looking for a quick way to get involved, head over to our GitHub Issues tab. We actively maintain labels like:
+* **`good first issue`** - Small, isolated tasks perfect for getting familiar with the repository layout.
+* **`help wanted`** - Features, bugs, or refactoring tasks that are high priority for our current roadmap.
 
 ---
 
@@ -40,22 +48,31 @@ To submit code changes:
 ### 1. Code Style
 
 We enforce standard Python formatting to keep the codebase maintainable and readable:
-* Use standard line length limits (79 or 88 characters).
+* Use standard line length limits (88 characters).
 * Use explicit type hinting for function arguments and return values where possible.
 * Document modules, classes, and public functions with clear docstrings.
 
-### 2. Linting and Formatting
+### 2. Linting, Formatting & Pre-Commit
 
-Run linting checks before committing. If you use formatters like `black` or `ruff`:
+Run linting checks before committing. We recommend installing our pre-commit hook framework to automate these checks natively from your git environment:
+
 ```bash
-# Format the code base
-black app/ cli/ tests/
+# Install the hooks locally
+pre-commit install
 
-# Run static analysis
-ruff check app/ cli/ tests/
+# Manually run checks against all files
+pre-commit run --all-files
 ```
 
-We recommend installing the pre-commit hook framework to automate checks (see `.pre-commit-config.yaml`).
+If you prefer to run individual formatters and linters manually (or via our project shortcuts):
+```bash
+# Run via Makefile automation
+make lint
+
+# Or run manually
+black app/ cli/ tests/
+ruff check app/ cli/ tests/
+```
 
 ### 3. Running the Test Suite
 
@@ -63,6 +80,10 @@ We use `pytest` for unit and integration testing. All tests are located under th
 
 Run the entire test suite locally:
 ```bash
+# Run via Makefile automation
+make test
+
+# Or run manually
 pytest tests/ -v
 ```
 
@@ -73,6 +94,8 @@ pytest tests/test_cli_sync.py -v
 pytest tests/test_cli_pdf.py -v
 ```
 
+Refer to [test_cli_patterns.py](file:///home/Krishna-Singh/securelens-backend/tests/test_cli_patterns.py), [test_cli_sync.py](file:///home/Krishna-Singh/securelens-backend/tests/test_cli_sync.py), and [test_cli_pdf.py](file:///home/Krishna-Singh/securelens-backend/tests/test_cli_pdf.py) for examples of testing our offline scanner, sync clients, and PDF exporters.
+
 Ensure all tests pass and write new tests covering any logic changes or new features you introduce.
 
 ---
@@ -80,7 +103,8 @@ Ensure all tests pass and write new tests covering any logic changes or new feat
 ## Pull Request Guidelines
 
 To help maintainers review your PR efficiently:
-* Keep PRs focused. Do not combine multiple unrelated changes into one pull request.
-* Write a clear title and description explaining what was changed and why.
-* Reference any related issues (e.g., `Closes #123`).
-* Verify that your branch is rebased on top of the latest `main` branch.
+* **Keep PRs focused.** Do not combine multiple unrelated changes into one pull request.
+* **Provide context.** Write a clear title and description explaining what was changed and why.
+* **Link your issues.** Reference any related issues (e.g., `Closes #123`) so they close automatically upon merge.
+* **Stay updated.** Verify that your branch is rebased on top of the latest upstream `main` branch.
+* **CI Validation:** Every PR triggers an automated workflow running our formatting and test suites. PRs cannot be merged until these checks pass.
