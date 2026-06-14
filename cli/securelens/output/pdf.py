@@ -73,7 +73,7 @@ def export_code_pdf(result, output_path: str) -> str:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
     summary_text = result.ai_summary or f"A static patterns analysis was performed on the codebase. Out of the files discovered, {len(result.vulnerabilities)} potential security vulnerabilities were reported."
-    pdf.multi_cell(0, 5, sanitize_text(summary_text))
+    pdf.multi_cell(0, 5, sanitize_text(summary_text), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
     # Files Scanned Section
@@ -86,7 +86,7 @@ def export_code_pdf(result, output_path: str) -> str:
     files_list = ", ".join(result.files_triaged[:15])
     if len(result.files_triaged) > 15:
         files_list += f", and {len(result.files_triaged) - 15} more"
-    pdf.multi_cell(0, 5, sanitize_text(files_list or "No files selected."))
+    pdf.multi_cell(0, 5, sanitize_text(files_list or "No files selected."), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
     # Issues Findings Section
@@ -123,14 +123,14 @@ def export_code_pdf(result, output_path: str) -> str:
             pdf.set_font("helvetica", "B", 9)
             pdf.cell(0, 6, "Explanation:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 9)
-            pdf.multi_cell(0, 4.5, sanitize_text(v.explanation))
+            pdf.multi_cell(0, 4.5, sanitize_text(v.explanation), new_x="LMARGIN", new_y="NEXT")
             
             if v.suggested_fix:
                 pdf.set_font("helvetica", "B", 9)
                 pdf.cell(0, 6, "Suggested Fix:", new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("courier", "", 8.5)
                 pdf.set_fill_color(245, 245, 245)
-                pdf.multi_cell(0, 4.5, sanitize_text(v.suggested_fix), fill=True)
+                pdf.multi_cell(0, 4.5, sanitize_text(v.suggested_fix), fill=True, new_x="LMARGIN", new_y="NEXT")
             
             pdf.ln(4)
             pdf.line(pdf.get_x(), pdf.get_y(), 200, pdf.get_y())
@@ -172,7 +172,7 @@ def export_web_pdf(result, output_path: str) -> str:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
     summary_text = result.ai_summary or f"An automated live security audit was performed on {result.url}. Out of the layers checked, {len(result.issues)} potential issues were flagged."
-    pdf.multi_cell(0, 5, sanitize_text(summary_text))
+    pdf.multi_cell(0, 5, sanitize_text(summary_text), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
     # Issues Section
@@ -208,7 +208,7 @@ def export_web_pdf(result, output_path: str) -> str:
             pdf.cell(0, 6, "Remediation / Fix:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("courier", "", 8.5)
             pdf.set_fill_color(245, 245, 245)
-            pdf.multi_cell(0, 4.5, sanitize_text(i.fix), fill=True)
+            pdf.multi_cell(0, 4.5, sanitize_text(i.fix), fill=True, new_x="LMARGIN", new_y="NEXT")
             
             pdf.ln(4)
             pdf.line(pdf.get_x(), pdf.get_y(), 200, pdf.get_y())
