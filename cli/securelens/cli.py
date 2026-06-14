@@ -42,15 +42,17 @@ def _require_config(cfg):
 
 # ── Main group ─────────────────────────────────────────────────────────────────
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option("2.0.0", prog_name="SecureLens AI")
-def main():
+@click.pass_context
+def main(ctx):
     """
     \b
     SecureLens AI — AI-powered security scanner
     Scan codebases, URLs and get instant security reports.
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(scan, path=".", model=None, output=None, max_files=None, ci=False, fail_on=None, no_ai=False, sync=False)
 
 
 # ── configure ─────────────────────────────────────────────────────────────────
