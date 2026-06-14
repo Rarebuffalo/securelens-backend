@@ -88,25 +88,26 @@ This starts the containers in the background, maps port 8000 to the host, and pe
 
 The `securelens` CLI allows you to execute scans directly from your local terminal and synchronize reports back to your backend account.
 
-### 1. Automated Script Installation
+Choose one of the following installation methods based on your platform and preferences:
 
-You can install the CLI automatically using the provided installer:
+### Method A: One-Line Global Installation (Cross-Platform)
+Recommended for general use. Installs the CLI globally on Windows, macOS, or Linux directly from the remote repository without needing to clone it:
+```bash
+pip install git+https://github.com/Rarebuffalo/securelens-backend.git#subdirectory=cli
+```
+*(Or use `pipx install git+...` to automatically isolate the tool in its own environment).*
 
+### Method B: Local Source Installation (Development)
+If you are contributing to this codebase or want to install it from the cloned repository folder:
+
+#### 1. Automated Script Installation (Linux/macOS)
 ```bash
 chmod +x cli/install.sh
 ./cli/install.sh
-```
-
-Ensure you have activated your virtual environment before running the tool:
-
-```bash
 source venv/bin/activate
 ```
 
-### 2. Manual Installation
-
-Alternatively, you can install the CLI in editable mode manually:
-
+#### 2. Manual Installation (Windows / Cross-Platform)
 ```bash
 pip install -e cli/
 ```
