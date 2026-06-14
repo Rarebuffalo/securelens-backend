@@ -172,6 +172,20 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
 
     root = Path(path).resolve()
 
+    # Safety check: prevent scanning home/root directories by mistake
+    if root == Path.home() or root == Path("/"):
+        if not ci:
+            if not Confirm.ask(
+                f"\n[bold yellow]⚠ Warning: You are attempting to scan your home or root directory ({root}).[/bold yellow]\n"
+                "  This may contain system caches, virtual environments, and massive system files.\n"
+                "  Do you want to continue?"
+            ):
+                console.print("[dim]Scan cancelled.[/dim]\n")
+                sys.exit(0)
+        else:
+            console.print(f"[bold red]✗ Error: Cannot scan home/root directory ({root}) in CI mode.[/bold red]\n")
+            sys.exit(1)
+
     if not ci:
         print_banner()
         print_scan_header(str(root), cfg.default_model)
