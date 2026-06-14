@@ -53,6 +53,10 @@ async def call_ai(
 
     if api_base:
         kwargs["api_base"] = api_base
+        if "agentrouter.org" in api_base.lower():
+            kwargs["extra_headers"] = {
+                "User-Agent": "claude-code/0.2.9",
+            }
 
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}

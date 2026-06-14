@@ -94,3 +94,21 @@ async def test_analyze_file_passes_api_base():
             mock_call_ai_json.assert_called_once()
             called_kwargs = mock_call_ai_json.call_args[1]
             assert called_kwargs["api_base"] == "https://agentrouter.org/v1"
+
+@pytest.mark.asyncio
+async def test_call_ai_injects_agentrouter_headers():
+    with patch("litellm.acompletion", new_callable=AsyncMock) as mock_acompletion:
+        mock_acompletion.return_value.choices = [
+            AsyncMock(message=AsyncMock(content="Mock response"))
+        ]
+        
+        await call_ai(
+            prompt="Hello",
+            api_key="mock_key",
+            model="openai/deepseek-chat",
+            api_base="https://agentrouter.org/v1"
+        )
+        
+        mock_acompletion.assert_called_once()
+        called_kwargs = mock_acompletion.call_args[1]
+        assert called_kwargs["extra_headers"] == {"User-Agent": "claude-code/0.2.9"}

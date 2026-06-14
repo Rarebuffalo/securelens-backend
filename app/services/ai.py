@@ -76,6 +76,10 @@ async def call_ai(
 
     if settings.ai_api_base:
         kwargs["api_base"] = settings.ai_api_base
+        if "agentrouter.org" in settings.ai_api_base.lower():
+            kwargs["extra_headers"] = {
+                "User-Agent": "claude-code/0.2.9",
+            }
 
     # JSON mode: supported natively by OpenAI and LiteLLM proxied Gemini.
     # For providers that don't support it, LiteLLM silently ignores the flag.
