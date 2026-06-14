@@ -195,7 +195,7 @@ async def triage_files(
     if rel_paths and remaining_budget > 0 and cfg.api_key:
         file_list_str = "\n".join(rel_paths[:300])  # cap to ~300 paths for token budget
         prompt = triage_prompt(file_list_str, remaining_budget)
-        result = await call_ai_json(prompt, cfg.api_key, cfg.default_model, temperature=0.1)
+        result = await call_ai_json(prompt, cfg.api_key, cfg.default_model, temperature=0.1, api_base=cfg.api_base)
         if result and "critical_files" in result:
             for rel in result["critical_files"]:
                 abs_path = root / rel
@@ -233,7 +233,7 @@ async def analyze_file(
         content = content[:30_000] + "\n... (truncated)"
 
     prompt = analysis_prompt(rel, content)
-    result = await call_ai_json(prompt, cfg.api_key, cfg.default_model, temperature=0.2)
+    result = await call_ai_json(prompt, cfg.api_key, cfg.default_model, temperature=0.2, api_base=cfg.api_base)
     if not result:
         return []
 

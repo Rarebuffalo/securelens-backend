@@ -52,7 +52,7 @@ def main(ctx):
     Scan codebases, URLs and get instant security reports.
     """
     if ctx.invoked_subcommand is None:
-        ctx.invoke(scan, path=".", model=None, output=None, max_files=None, ci=False, fail_on=None, no_ai=False, sync=False)
+        click.echo(ctx.get_help())
 
 
 # ── configure ─────────────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
                 for v in vulnerabilities
             ]
             prompt = summary_prompt(str(root), _json.dumps(issues_data, indent=2))
-            ai_summary = await call_ai(prompt, cfg.api_key, cfg.default_model, temperature=0.4)
+            ai_summary = await call_ai(prompt, cfg.api_key, cfg.default_model, temperature=0.4, api_base=cfg.api_base)
         progress.update(task_summary, completed=100, total=100, detail="Done")
 
     # ── Build result ─────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
             ]
             prompt = web_summary_prompt(url, _json.dumps(issues_data, indent=2),
                                         result.score, result.grade)
-            result.ai_summary = await call_ai(prompt, cfg.api_key, cfg.default_model, temperature=0.4)
+            result.ai_summary = await call_ai(prompt, cfg.api_key, cfg.default_model, temperature=0.4, api_base=cfg.api_base)
         progress.update(task2, completed=100, total=100, detail="Done")
 
     fmt = cfg.output_format

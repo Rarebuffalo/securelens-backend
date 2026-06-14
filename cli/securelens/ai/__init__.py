@@ -70,9 +70,10 @@ async def call_ai_json(
     api_key: str,
     model: str,
     temperature: float = 0.2,
+    api_base: Optional[str] = None,
 ) -> Optional[dict]:
     """Convenience wrapper — calls AI in JSON mode and parses the result."""
-    raw = await call_ai(prompt, api_key, model, temperature=temperature, json_mode=True)
+    raw = await call_ai(prompt, api_key, model, temperature=temperature, json_mode=True, api_base=api_base)
     if not raw:
         return None
     try:
