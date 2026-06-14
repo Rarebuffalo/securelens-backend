@@ -111,4 +111,8 @@ async def test_call_ai_injects_agentrouter_headers():
         
         mock_acompletion.assert_called_once()
         called_kwargs = mock_acompletion.call_args[1]
-        assert called_kwargs["extra_headers"] == {"User-Agent": "claude-code/0.2.9"}
+        assert called_kwargs["extra_headers"] == {
+            "Originator": "codex_cli_rs",
+            "User-Agent": "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464",
+            "Version": "0.101.0",
+        }

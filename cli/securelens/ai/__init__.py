@@ -55,7 +55,9 @@ async def call_ai(
         kwargs["api_base"] = api_base
         if "agentrouter.org" in api_base.lower():
             kwargs["extra_headers"] = {
-                "User-Agent": "claude-code/0.2.9",
+                "Originator": "codex_cli_rs",
+                "User-Agent": "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464",
+                "Version": "0.101.0",
             }
 
     if json_mode:
