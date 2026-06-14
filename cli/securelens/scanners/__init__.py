@@ -99,6 +99,7 @@ def discover_files(root: Path, cfg: CLIConfig) -> list[Path]:
     Respects .gitignore in the root and cfg.ignore_patterns.
     Skips binaries and files larger than cfg.max_file_size_kb.
     """
+    import os
     # Build a combined spec from config ignore_patterns + .gitignore
     ignore_patterns = list(cfg.ignore_patterns)
     gitignore_path = root / ".gitignore"
@@ -113,18 +114,41 @@ def discover_files(root: Path, cfg: CLIConfig) -> list[Path]:
     spec = pathspec.PathSpec.from_lines("gitwildmatch", ignore_patterns)
     max_bytes = cfg.max_file_size_kb * 1024
 
+    # Hardcoded directory blacklist to prune execution paths immediately
+    prune_dirs = {
+        ".git", "node_modules", "venv", ".venv", "__pycache__",
+        "dist", "build", ".next", ".cache", ".npm", ".cargo",
+        ".rustup", ".local", ".ssh", ".gnupg", ".docker", ".vscode",
+        ".idea", "Library", "Pictures", "Music", "Videos", "Documents"
+    }
+
     candidates: list[Path] = []
-    for p in root.rglob("*"):
-        if not p.is_file():
-            continue
-        rel = p.relative_to(root).as_posix()
-        if spec.match_file(rel):
-            continue
-        if p.suffix.lower() in BINARY_EXTENSIONS:
-            continue
-        if p.stat().st_size > max_bytes:
-            continue
-        candidates.append(p)
+    for dirpath, dirnames, filenames in os.walk(root):
+        # 1. Prune standard blacklisted folders in-place
+        dirnames[:] = [d for d in dirnames if d not in prune_dirs]
+
+        # 2. Prune directories matching the ignore spec
+        active_dirs = []
+        for d in dirnames:
+            rel_path = os.path.relpath(os.path.join(dirpath, d), root)
+            if not spec.match_file(rel_path + "/"):
+                active_dirs.append(d)
+        dirnames[:] = active_dirs
+
+        # 3. Process files in the active directory
+        for f in filenames:
+            p = Path(dirpath) / f
+            rel = p.relative_to(root).as_posix()
+            if spec.match_file(rel):
+                continue
+            if p.suffix.lower() in BINARY_EXTENSIONS:
+                continue
+            try:
+                if p.stat().st_size > max_bytes:
+                    continue
+            except OSError:
+                continue
+            candidates.append(p)
 
     return sorted(candidates)
 
