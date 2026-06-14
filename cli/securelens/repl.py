@@ -93,7 +93,7 @@ async def run_repl(ctx: ReplContext) -> None:
             continue
 
         # ── AI response ─────────────────────────────────────────────────────
-        if not ctx.api_key:
+        if not ctx.api_key and not ctx.model.startswith("ollama/"):
             console.print(
                 "\n  [bold red]✗ No API key configured.[/bold red] "
                 "Run [cyan]securelens configure[/cyan] to set one.\n"
