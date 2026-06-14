@@ -138,7 +138,7 @@ async def chat_with_scan(
     We load the scan from PostgreSQL using the scan_id, so this works
     correctly across server restarts and multiple workers.
     """
-    if not settings.ai_api_key:
+    if not settings.effective_ai_key:
         raise HTTPException(
             status_code=400,
             detail="AI Chat is disabled because no AI API key is configured.",
@@ -285,12 +285,12 @@ async def list_available_models():
     Lists AI models available to the configured provider.
     Only meaningful when using the Gemini provider.
     """
-    if not settings.ai_api_key:
+    if not settings.effective_ai_key:
         raise HTTPException(status_code=500, detail="No AI API key is set.")
     try:
         from google import genai
 
-        client = genai.Client(api_key=settings.ai_api_key)
+        client = genai.Client(api_key=settings.effective_ai_key)
         models = []
         for model in client.models.list():
             if "generateContent" in model.supported_actions:
