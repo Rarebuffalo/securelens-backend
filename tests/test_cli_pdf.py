@@ -14,15 +14,15 @@ def test_export_code_pdf_compiles(tmp_path):
         VulnerabilityFinding(
             file_path="app.py",
             severity="Critical",
-            issue="Hardcoded Secret Key",
-            explanation="Exposing secret key inside app.py.",
-            suggested_fix="Load key from environment",
+            issue="Hardcoded Secret Key with unicode ’smart’ quotes",
+            explanation="Exposing secret key inside app.py • vulnerable to attacks.",
+            suggested_fix="Load key from environment: jwt_secret = Field(default=\"\") \u25b6 check it.",
             line_number=5
         ),
         VulnerabilityFinding(
             file_path="db.py",
             severity="High",
-            issue="Raw SQL Statement",
+            issue="Raw SQL Statement \u2717 check fail",
             explanation="SQL injection inside db.py.",
             suggested_fix="Use parameterized queries",
             line_number=20
@@ -34,7 +34,7 @@ def test_export_code_pdf_compiles(tmp_path):
         total_files_found=10,
         files_triaged=["app.py", "db.py"],
         vulnerabilities=findings,
-        ai_summary="This is a dummy AI report summary describing security posture."
+        ai_summary="This is a dummy AI report summary describing security posture with check \u2713 and block \u2588."
     )
     result.compute_score()
     
