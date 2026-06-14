@@ -299,12 +299,12 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
         return
 
     # ── Interactive REPL ─────────────────────────────────────────────────────
-    if fmt in ("terminal", "all", "markdown") and not no_ai:
+    if fmt in ("terminal", "all", "markdown"):
         ctx = ReplContext(
             target=str(root),
             scan_result=result,
             target_type="code",
-            api_key=cfg.api_key,
+            api_key=cfg.api_key if not no_ai else None,
             model=cfg.default_model,
         )
         await run_repl(ctx)
@@ -394,12 +394,12 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
         _ci_exit(result.issues, fail_on, "web")
         return
 
-    if fmt in ("terminal", "all", "markdown") and not no_ai:
+    if fmt in ("terminal", "all", "markdown"):
         ctx = ReplContext(
             target=url,
             scan_result=result,
             target_type="web",
-            api_key=cfg.api_key,
+            api_key=cfg.api_key if not no_ai else None,
             model=cfg.default_model,
         )
         await run_repl(ctx)
