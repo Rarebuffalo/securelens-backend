@@ -130,18 +130,24 @@ uvicorn app.main:app --reload
 
 ### 2. Install Local CLI
 
-Install the `securelens` CLI globally or inside your workspace virtual environment:
+Choose one of the following installation methods based on your platform and preferences:
+
+#### Method A: One-Line Global Installation (Cross-Platform)
+Recommended for general use. Installs the CLI globally on Windows, macOS, or Linux directly from the repository without needing to clone it manually:
 ```bash
-# Execute the automated installer script
+pip install git+https://github.com/Rarebuffalo/securelens-backend.git#subdirectory=cli
+```
+*(Or use `pipx install git+...` to automatically isolate the tool in its own environment).*
+
+#### Method B: Local Source Installation (Development)
+If you have cloned this repository locally:
+```bash
+# On Linux/macOS
 chmod +x cli/install.sh
 ./cli/install.sh
-
-# Activate environment to use the tool
 source venv/bin/activate
-```
 
-Alternatively, install in editable mode:
-```bash
+# On Windows or manual setup
 pip install -e cli/
 ```
 
