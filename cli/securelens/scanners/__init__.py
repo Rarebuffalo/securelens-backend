@@ -150,6 +150,12 @@ def discover_files(root: Path, cfg: CLIConfig) -> list[Path]:
                 continue
             candidates.append(p)
 
+            # Capping safeguard: limit to 1000 candidate files
+            if len(candidates) >= 1000:
+                break
+        if len(candidates) >= 1000:
+            break
+
     return sorted(candidates)
 
 
