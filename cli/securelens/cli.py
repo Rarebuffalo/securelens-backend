@@ -30,8 +30,8 @@ def _run(coro):
 
 
 def _require_config(cfg):
-    """Exit early with a friendly message if no API key is set."""
-    if not cfg.api_key:
+    """Exit early with a friendly message if no API key is set and not using a local model."""
+    if not cfg.api_key and not cfg.default_model.startswith("ollama/"):
         console.print(
             "\n[bold yellow]⚠ No API key configured.[/bold yellow]\n"
             "  Run [bold cyan]securelens configure[/bold cyan] to set one up.\n"
@@ -158,7 +158,15 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
         cfg.max_files_to_scan = max_files
 
     if not no_ai:
-        _require_config(cfg)
+        if not cfg.api_key and not cfg.default_model.startswith("ollama/"):
+            console.print(
+                "\n[bold yellow]⚠ No API key configured.[/bold yellow] Automatically falling back to [bold cyan]offline pattern-based mode[/bold cyan].\n"
+                "  To use AI capabilities, run [bold cyan]securelens configure[/bold cyan] to set an API key,\n"
+                "  or set the [dim]SECURELENS_API_KEY[/dim] environment variable.\n"
+            )
+            no_ai = True
+        else:
+            _require_config(cfg)
 
     root = Path(path).resolve()
 
