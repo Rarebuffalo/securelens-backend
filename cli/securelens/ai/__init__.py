@@ -21,6 +21,7 @@ async def call_ai(
     temperature: float = 0.3,
     json_mode: bool = False,
     conversation_history: Optional[list] = None,
+    api_base: Optional[str] = None,
 ) -> str:
     """
     Single entry-point for all AI calls in the CLI.
@@ -34,6 +35,7 @@ async def call_ai(
     json_mode            : Ask the model to respond with valid JSON only
     conversation_history : Optional list of {"role": ..., "content": ...} dicts
                            for multi-turn chat sessions
+    api_base             : Optional custom API base URL (e.g. for Agent Router)
     """
     import litellm
 
@@ -48,6 +50,9 @@ async def call_ai(
         "temperature": temperature,
         "api_key": api_key if api_key else None,
     }
+
+    if api_base:
+        kwargs["api_base"] = api_base
 
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}

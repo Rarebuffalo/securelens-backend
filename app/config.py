@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # Leave blank for Ollama (local, no key needed).
     ai_api_key: str | None = None
 
+    # AI_API_BASE: Custom API base URL (e.g. for Agent Router or custom OpenAI-compatible proxies)
+    ai_api_base: str | None = None
+
     # -------------------------------------------------------------------------
     # Legacy Gemini key — kept for backward compatibility.
     # If AI_API_KEY is not set but GEMINI_API_KEY is, we use that automatically.

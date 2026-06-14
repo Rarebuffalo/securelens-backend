@@ -57,6 +57,7 @@ class ReplContext:
     target_type: str           # "code" | "web" | "github"
     api_key: str
     model: str
+    api_base: Optional[str] = None
     conversation_history: list = field(default_factory=list)
 
 
@@ -109,6 +110,7 @@ async def run_repl(ctx: ReplContext) -> None:
                 model=ctx.model,
                 temperature=0.5,
                 conversation_history=ctx.conversation_history,
+                api_base=ctx.api_base,
             )
 
         if response:

@@ -76,7 +76,8 @@ def configure():
         "4": ("gpt-4o",                   "OpenAI GPT-4o"),
         "5": ("claude-3-5-haiku-20241022","Anthropic Claude 3.5 Haiku"),
         "6": ("ollama/llama3.1",          "Ollama (local, no key needed)"),
-        "7": ("custom",                   "Custom model string"),
+        "7": ("agentrouter",              "Agent Router (OpenAI-compatible gateway)"),
+        "8": ("custom",                   "Custom LiteLLM model / Endpoint"),
     }
     console.print("[bold]Choose AI Provider:[/bold]")
     for k, (_, desc) in providers.items():
@@ -85,11 +86,21 @@ def configure():
 
     choice = Prompt.ask("Select", choices=list(providers.keys()), default="1")
     model_str, _ = providers[choice]
+    api_base = ""
 
-    if model_str == "custom":
+    if choice == "7":
+        model_str = Prompt.ask("Enter model name (must start with 'openai/')", default="openai/deepseek-chat")
+        if not model_str.startswith("openai/"):
+            model_str = "openai/" + model_str
+        api_base = Prompt.ask("Enter API base URL", default="https://agentrouter.org/v1").strip()
+    elif choice == "8":
+        model_str = Prompt.ask("Enter LiteLLM model string (e.g. openai/my-model-name)")
+        api_base = Prompt.ask("Enter custom API base URL (optional, e.g. https://my-endpoint/v1)", default="").strip()
+    elif model_str == "custom":
         model_str = Prompt.ask("Enter LiteLLM model string (e.g. openrouter/google/gemini-flash)")
 
     cfg.default_model = model_str
+    cfg.api_base = api_base
 
     # API key (skip for Ollama)
     if not model_str.startswith("ollama/"):
@@ -108,6 +119,8 @@ def configure():
     save_config(cfg)
     console.print(f"\n[bold green]✓ Config saved to {CONFIG_FILE}[/bold green]")
     console.print(f"  Model:  [cyan]{cfg.default_model}[/cyan]")
+    if cfg.api_base:
+        console.print(f"  Base URL: [cyan]{cfg.api_base}[/cyan]")
     console.print(f"  Output: [cyan]{cfg.output_format}[/cyan]\n")
 
 
@@ -306,6 +319,7 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
             target_type="code",
             api_key=cfg.api_key if not no_ai else None,
             model=cfg.default_model,
+            api_base=cfg.api_base if not no_ai else None,
         )
         await run_repl(ctx)
 
@@ -401,6 +415,7 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
             target_type="web",
             api_key=cfg.api_key if not no_ai else None,
             model=cfg.default_model,
+            api_base=cfg.api_base if not no_ai else None,
         )
         await run_repl(ctx)
 

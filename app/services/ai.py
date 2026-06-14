@@ -74,6 +74,9 @@ async def call_ai(
         "api_key": api_key,
     }
 
+    if settings.ai_api_base:
+        kwargs["api_base"] = settings.ai_api_base
+
     # JSON mode: supported natively by OpenAI and LiteLLM proxied Gemini.
     # For providers that don't support it, LiteLLM silently ignores the flag.
     if json_mode:

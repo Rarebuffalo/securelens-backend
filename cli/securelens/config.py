@@ -20,6 +20,7 @@ class CLIConfig:
     # AI backend
     default_model: str = "gemini/gemini-2.0-flash"
     api_key: str = ""
+    api_base: str = ""
 
     # Backend Integration (for sync / auth)
     backend_url: str = "http://localhost:8000"
@@ -61,6 +62,7 @@ def load_config() -> CLIConfig:
             data = yaml.safe_load(f) or {}
         cfg.default_model = data.get("default_model", cfg.default_model)
         cfg.api_key = data.get("api_key", cfg.api_key)
+        cfg.api_base = data.get("api_base", cfg.api_base)
         cfg.backend_url = data.get("backend_url", cfg.backend_url)
         cfg.token = data.get("token", cfg.token)
         cfg.output_format = data.get("output_format", cfg.output_format)
@@ -82,6 +84,11 @@ def load_config() -> CLIConfig:
         or os.environ.get("AI_MODEL")
         or cfg.default_model
     )
+    cfg.api_base = (
+        os.environ.get("SECURELENS_API_BASE")
+        or os.environ.get("AI_API_BASE")
+        or cfg.api_base
+    )
 
     return cfg
 
@@ -92,6 +99,7 @@ def save_config(cfg: CLIConfig) -> None:
     data = {
         "default_model": cfg.default_model,
         "api_key": cfg.api_key,
+        "api_base": cfg.api_base,
         "backend_url": cfg.backend_url,
         "token": cfg.token,
         "output_format": cfg.output_format,
