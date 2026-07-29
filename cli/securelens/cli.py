@@ -52,7 +52,15 @@ def main(ctx):
     Scan codebases, URLs and get instant security reports.
     """
     if ctx.invoked_subcommand is None:
-        click.echo(ctx.get_help())
+        from securelens.config import load_config
+        from securelens.repl import run_global_shell, ShellContext
+        cfg = load_config()
+        shell_ctx = ShellContext(
+            api_key=cfg.api_key,
+            model=cfg.default_model,
+            api_base=cfg.api_base,
+        )
+        _run(run_global_shell(shell_ctx))
 
 
 # ── configure ─────────────────────────────────────────────────────────────────
@@ -153,8 +161,7 @@ def scan(path, model, output, max_files, ci, fail_on, no_ai, sync):
     _run(_scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync))
 
 
-async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
-    from securelens.config import load_config
+async def run_local_scan_workflow(path, cfg, no_ai=False, sync=False, ci=False):
     from securelens.output import print_banner, print_scan_header, print_code_scan_report, make_progress, print_error
     from securelens.output.exporters import save_json, save_markdown, to_json
     from securelens.scanners import (
@@ -162,26 +169,7 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
     )
     from securelens.ai import call_ai
     from securelens.ai.prompts import summary_prompt
-    from securelens.repl import run_repl, ReplContext
-
-    cfg = load_config()
-    if model:
-        cfg.default_model = model
-    if output:
-        cfg.output_format = output
-    if max_files:
-        cfg.max_files_to_scan = max_files
-
-    if not no_ai:
-        if not cfg.api_key and not cfg.default_model.startswith("ollama/"):
-            console.print(
-                "\n[bold yellow]⚠ No API key configured.[/bold yellow] Automatically falling back to [bold cyan]offline pattern-based mode[/bold cyan].\n"
-                "  To use AI capabilities, run [bold cyan]securelens configure[/bold cyan] to set an API key,\n"
-                "  or set the [dim]SECURELENS_API_KEY[/dim] environment variable.\n"
-            )
-            no_ai = True
-        else:
-            _require_config(cfg)
+    from rich.prompt import Confirm
 
     root = Path(path).resolve()
 
@@ -194,7 +182,7 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
                 "  Do you want to continue?"
             ):
                 console.print("[dim]Scan cancelled.[/dim]\n")
-                sys.exit(0)
+                return None
         else:
             console.print(f"[bold red]✗ Error: Cannot scan home/root directory ({root}) in CI mode.[/bold red]\n")
             sys.exit(1)
@@ -217,8 +205,6 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
             "[2/4] Triaging with AI...", total=None, detail=""
         )
         if no_ai:
-            # In --no-ai mode: take sensitive files first, then fill the budget
-            # with remaining files sorted by name so we always return something.
             from securelens.scanners import _is_always_scan
             sensitive = [p for p in candidates if _is_always_scan(p)]
             others = [p for p in candidates if not _is_always_scan(p)]
@@ -288,9 +274,7 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
     if fmt in ("terminal", "all"):
         print_code_scan_report(result)
     if fmt == "json":
-        # json mode: print to stdout only — good for piping / CI
         console.print(to_json(result, "code"))
-        return  # skip REPL in pure JSON mode
     if fmt in ("markdown", "all"):
         path_out = save_markdown(result, "code")
         if not ci:
@@ -306,15 +290,51 @@ async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
         else:
             console.print("  [bold yellow]⚠ Sync failed: Could not connect to backend or token is invalid.[/bold yellow]\n")
 
+    return result
+
+
+async def _scan_async(path, model, output, max_files, ci, fail_on, no_ai, sync):
+    from securelens.config import load_config
+    from securelens.repl import run_repl, ReplContext
+
+    cfg = load_config()
+    if model:
+        cfg.default_model = model
+    if output:
+        cfg.output_format = output
+    if max_files:
+        cfg.max_files_to_scan = max_files
+
+    if not no_ai:
+        if not cfg.api_key and not cfg.default_model.startswith("ollama/"):
+            console.print(
+                "\n[bold yellow]⚠ No API key configured.[/bold yellow] Automatically falling back to [bold cyan]offline pattern-based mode[/bold cyan].\n"
+                "  To use AI capabilities, run [bold cyan]securelens configure[/bold cyan] to set an API key,\n"
+                "  or set the [dim]SECURELENS_API_KEY[/dim] environment variable.\n"
+            )
+            no_ai = True
+        else:
+            _require_config(cfg)
+
+    result = await run_local_scan_workflow(
+        path=path,
+        cfg=cfg,
+        no_ai=no_ai,
+        sync=sync,
+        ci=ci,
+    )
+    if not result:
+        return
+
     # ── CI exit code ─────────────────────────────────────────────────────────
     if ci:
         _ci_exit(result.vulnerabilities, fail_on, "code")
         return
 
     # ── Interactive REPL ─────────────────────────────────────────────────────
-    if fmt in ("terminal", "all", "markdown"):
+    if cfg.output_format in ("terminal", "all", "markdown"):
         ctx = ReplContext(
-            target=str(root),
+            target=result.target,
             scan_result=result,
             target_type="code",
             api_key=cfg.api_key if not no_ai else None,
@@ -348,8 +368,7 @@ def web(url, model, output, ci, fail_on, no_ai):
     _run(_web_async(url, model, output, ci, fail_on, no_ai))
 
 
-async def _web_async(url, model, output, ci, fail_on, no_ai):
-    from securelens.config import load_config
+async def run_web_scan_workflow(url, cfg, no_ai=False, ci=False):
     from securelens.output import (
         print_banner, print_scan_header, print_web_scan_report,
         make_progress, console
@@ -358,18 +377,11 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
     from securelens.scanners.web_scanner import scan_url
     from securelens.ai import call_ai
     from securelens.ai.prompts import web_summary_prompt
-    from securelens.repl import run_repl, ReplContext
     import json as _json
 
     # Normalise URL
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-
-    cfg = load_config()
-    if model:
-        cfg.default_model = model
-    if output:
-        cfg.output_format = output
 
     if not ci:
         print_banner()
@@ -396,19 +408,37 @@ async def _web_async(url, model, output, ci, fail_on, no_ai):
     if fmt in ("terminal", "all"):
         print_web_scan_report(result)
     if fmt == "json":
-        # json mode: print to stdout only — good for piping / CI
         console.print(to_json(result, "web"))
-        return  # skip REPL in pure JSON mode
     if fmt in ("markdown", "all"):
         p = save_markdown(result, "web")
         if not ci:
             console.print(f"  [green]✓ Markdown saved:[/green] [dim]{p}[/dim]\n")
 
+    return result
+
+
+async def _web_async(url, model, output, ci, fail_on, no_ai):
+    from securelens.config import load_config
+    from securelens.repl import run_repl, ReplContext
+
+    cfg = load_config()
+    if model:
+        cfg.default_model = model
+    if output:
+        cfg.output_format = output
+
+    result = await run_web_scan_workflow(
+        url=url,
+        cfg=cfg,
+        no_ai=no_ai,
+        ci=ci,
+    )
+
     if ci:
         _ci_exit(result.issues, fail_on, "web")
         return
 
-    if fmt in ("terminal", "all", "markdown"):
+    if cfg.output_format in ("terminal", "all", "markdown"):
         ctx = ReplContext(
             target=url,
             scan_result=result,
