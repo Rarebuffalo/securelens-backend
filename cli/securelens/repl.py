@@ -61,6 +61,245 @@ class ReplContext:
     conversation_history: list = field(default_factory=list)
 
 
+@dataclass
+class ShellContext:
+    api_key: Optional[str] = None
+    model: str = "openai/deepseek-chat"
+    api_base: Optional[str] = None
+    active_result: Optional[object] = None
+    target_type: Optional[str] = None  # "code" | "web"
+    conversation_history: list = field(default_factory=list)
+
+
+SHELL_HELP_TEXT = """
+[bold cyan]Available interactive commands:[/bold cyan]
+
+  [bold]/scan <path>[/bold]         Scan a local codebase (e.g. /scan .)
+  [bold]/scan-web <url>[/bold]       Scan a live website (e.g. /scan-web https://example.com)
+  [bold]/configure[/bold]            Launch the interactive configuration wizard
+  [bold]/score[/bold]                Show score/grade of the active scan
+  [bold]/issues[/bold]               Show a summary of found issues
+  [bold]/issues <level>[/bold]       Filter issues by severity (critical/high/medium/low)
+  [bold]/files[/bold]                List files analyzed in the active scan
+  [bold]/export markdown[/bold]      Save active report as Markdown
+  [bold]/export json[/bold]          Save active report as JSON
+  [bold]/export pdf[/bold]           Save active report as PDF
+  [bold]/model <name>[/bold]         Switch AI model (e.g. /model gpt-4o-mini)
+  [bold]/clear[/bold]                Clear the terminal
+  [bold]/exit[/bold]                 Exit the shell
+
+Or ask a question in plain English about the active scan:
+  [dim]> What is the Cassandra credentials finding?[/dim]
+"""
+
+
+async def run_global_shell(ctx: ShellContext) -> None:
+    from securelens.output import print_banner
+    print_banner()
+    console.print("[bold cyan]Welcome to SecureLens AI Interactive Shell[/bold cyan]")
+    console.print("[dim]Type [bold]/help[/bold] for a list of available commands or [bold]/exit[/bold] to quit.[/dim]\n")
+
+    while True:
+        try:
+            user_input = Prompt.ask("[bold cyan]securelens >[/bold cyan]")
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Goodbye![/dim]\n")
+            break
+
+        user_input = user_input.strip()
+        if not user_input:
+            continue
+
+        if user_input.startswith("/"):
+            should_exit = await _handle_global_slash_command(user_input, ctx)
+            if should_exit:
+                break
+            continue
+
+        # Chat logic about active scan result
+        if not ctx.active_result:
+            console.print("\n  [bold yellow]⚠ No active scan loaded.[/bold yellow] Run a scan first: [cyan]/scan .[/cyan]\n")
+            continue
+
+        if not ctx.api_key and not ctx.model.startswith("ollama/"):
+            console.print(
+                "\n  [bold red]✗ No API key configured.[/bold red] "
+                "Run [cyan]/configure[/cyan] to set one.\n"
+            )
+            continue
+
+        # Setup standard ReplContext so we can use existing _build_scan_context
+        repl_ctx = ReplContext(
+            target=ctx.active_result.target if ctx.target_type == "code" else ctx.active_result.url,
+            scan_result=ctx.active_result,
+            target_type=ctx.target_type,
+            api_key=ctx.api_key,
+            model=ctx.model,
+            api_base=ctx.api_base,
+            conversation_history=ctx.conversation_history,
+        )
+        scan_ctx_str = _build_scan_context(repl_ctx)
+
+        with console.status("[dim]Thinking...[/dim]", spinner="dots"):
+            prompt = chat_prompt(repl_ctx.target, scan_ctx_str, user_input)
+            response = await call_ai(
+                prompt=prompt,
+                api_key=ctx.api_key,
+                model=ctx.model,
+                temperature=0.5,
+                conversation_history=ctx.conversation_history,
+                api_base=ctx.api_base,
+            )
+
+        if response:
+            ctx.conversation_history.append({"role": "user", "content": user_input})
+            ctx.conversation_history.append({"role": "assistant", "content": response})
+            if len(ctx.conversation_history) > 40:
+                ctx.conversation_history = ctx.conversation_history[-40:]
+
+            console.print()
+            console.print(Panel(
+                Markdown(response),
+                border_style="dim cyan",
+                padding=(0, 1),
+            ))
+            console.print()
+        else:
+            console.print(
+                "\n  [bold red]✗ No response from AI.[/bold red] "
+                "Check your API key and network connection.\n"
+            )
+
+
+async def _handle_global_slash_command(cmd: str, ctx: ShellContext) -> bool:
+    parts = cmd.strip().split(maxsplit=2)
+    command = parts[0].lower()
+
+    if command == "/exit":
+        console.print("\n[dim]Goodbye![/dim]\n")
+        return True
+
+    elif command == "/help":
+        console.print(SHELL_HELP_TEXT)
+
+    elif command == "/clear":
+        console.clear()
+
+    elif command == "/configure":
+        from securelens.cli import configure
+        configure.callback()
+
+    elif command in ("/scan", "/scan-web"):
+        from securelens.config import load_config
+        from securelens.cli import run_local_scan_workflow, run_web_scan_workflow
+
+        cfg = load_config()
+        ctx.api_key = cfg.api_key
+        ctx.api_base = cfg.api_base
+        ctx.model = cfg.default_model
+
+        if command == "/scan":
+            path = parts[1] if len(parts) > 1 else "."
+            no_ai = not ctx.api_key
+            result = await run_local_scan_workflow(
+                path=path,
+                cfg=cfg,
+                no_ai=no_ai,
+                sync=False,
+                ci=False,
+            )
+            if result:
+                ctx.active_result = result
+                ctx.target_type = "code"
+                ctx.conversation_history.clear()
+        else:  # /scan-web
+            if len(parts) < 2:
+                console.print("\n  [bold red]✗ Error: Missing URL.[/bold red] Usage: /scan-web <url>\n")
+                return False
+            url = parts[1]
+            no_ai = not ctx.api_key
+            result = await run_web_scan_workflow(
+                url=url,
+                cfg=cfg,
+                no_ai=no_ai,
+                ci=False,
+            )
+            if result:
+                ctx.active_result = result
+                ctx.target_type = "web"
+                ctx.conversation_history.clear()
+
+    elif command == "/model":
+        if len(parts) < 2:
+            console.print(f"\n  [dim]Current model: {ctx.model}[/dim]")
+            console.print("  [dim]Usage: /model <model-name>[/dim]\n")
+        else:
+            ctx.model = parts[1]
+            console.print(f"\n  [bold green]✓ Model switched to: {ctx.model}[/bold green]\n")
+
+    elif command in ("/score", "/issues", "/files", "/export"):
+        if not ctx.active_result:
+            console.print("\n  [bold yellow]⚠ No active scan loaded.[/bold yellow] Run a scan first: [cyan]/scan .[/cyan]\n")
+            return False
+
+        repl_ctx = ReplContext(
+            target=ctx.active_result.target if ctx.target_type == "code" else ctx.active_result.url,
+            scan_result=ctx.active_result,
+            target_type=ctx.target_type,
+            api_key=ctx.api_key or "",
+            model=ctx.model,
+            api_base=ctx.api_base,
+            conversation_history=ctx.conversation_history,
+        )
+
+        if command == "/score":
+            r = ctx.active_result
+            from securelens.output import GRADE_COLOR
+            grade_color = GRADE_COLOR.get(r.grade, "white")
+            console.print(
+                f"\n  Score: [{grade_color}]{r.score}/100  Grade: {r.grade}[/{grade_color}]\n"
+            )
+
+        elif command == "/issues":
+            severity_filter = parts[1].strip().lower() if len(parts) > 1 else None
+            _print_issues_summary(repl_ctx, severity_filter)
+
+        elif command == "/files":
+            result = ctx.active_result
+            if ctx.target_type == "code" and hasattr(result, "files_triaged"):
+                if result.files_triaged:
+                    console.print("\n[bold]Files analyzed:[/bold]")
+                    for f in result.files_triaged:
+                        console.print(f"  [dim]• {f}[/dim]")
+                else:
+                    console.print("\n  [dim]No files were analyzed.[/dim]")
+                console.print()
+            else:
+                console.print("\n  [dim]File list not available for web scans.[/dim]\n")
+
+        elif command == "/export":
+            fmt = parts[1].lower() if len(parts) > 1 else "markdown"
+            target_type = "code" if ctx.target_type == "code" else "web"
+            if fmt == "json":
+                path = save_json(ctx.active_result, target_type)
+                console.print(f"\n  [bold green]✓ JSON report saved:[/bold green] [dim]{path}[/dim]\n")
+            elif fmt == "pdf":
+                from securelens.output.exporters import save_pdf
+                path = save_pdf(ctx.active_result, target_type)
+                console.print(f"\n  [bold green]✓ PDF report saved:[/bold green] [dim]{path}[/dim]\n")
+            else:
+                path = save_markdown(ctx.active_result, target_type)
+                console.print(f"\n  [bold green]✓ Markdown report saved:[/bold green] [dim]{path}[/dim]\n")
+
+    else:
+        console.print(
+            f"\n  [bold red]✗ Unknown command: {command}[/bold red] "
+            "Type [cyan]/help[/cyan] for available commands.\n"
+        )
+
+    return False
+
+
 async def run_repl(ctx: ReplContext) -> None:
     """
     Enter the interactive REPL. Blocks until the user exits.
