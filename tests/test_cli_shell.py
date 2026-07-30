@@ -23,7 +23,7 @@ async def test_global_shell_help_and_exit():
         input_idx += 1
         return val
         
-    with patch("securelens.repl.Prompt.ask", side_effect=mock_ask):
+    with patch("securelens.repl.ShellPrompt.ask", side_effect=mock_ask):
         with patch("securelens.repl.console.print") as mock_print:
             await run_global_shell(ctx)
             mock_print.assert_any_call("\n[dim]Goodbye![/dim]\n")
@@ -44,7 +44,7 @@ async def test_global_shell_warns_no_scan():
         input_idx += 1
         return val
         
-    with patch("securelens.repl.Prompt.ask", side_effect=mock_ask):
+    with patch("securelens.repl.ShellPrompt.ask", side_effect=mock_ask):
         with patch("securelens.repl.console.print") as mock_print:
             await run_global_shell(ctx)
             mock_print.assert_any_call("\n  [bold yellow]⚠ No active scan loaded.[/bold yellow] Run a scan first: [cyan]/scan .[/cyan]\n")
@@ -65,7 +65,7 @@ async def test_global_shell_switch_model():
         input_idx += 1
         return val
         
-    with patch("securelens.repl.Prompt.ask", side_effect=mock_ask):
+    with patch("securelens.repl.ShellPrompt.ask", side_effect=mock_ask):
         await run_global_shell(ctx)
         assert ctx.model == "gpt-4o"
 
@@ -91,7 +91,7 @@ async def test_global_shell_scan_command_routing():
     mock_result.score = 100
     mock_result.vulnerabilities = []
     
-    with patch("securelens.repl.Prompt.ask", side_effect=mock_ask):
+    with patch("securelens.repl.ShellPrompt.ask", side_effect=mock_ask):
         with patch("securelens.cli.run_local_scan_workflow", new_callable=AsyncMock) as mock_scan:
             mock_scan.return_value = mock_result
             await run_global_shell(ctx)
