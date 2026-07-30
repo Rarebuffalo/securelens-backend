@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.0.0] - 2026-07-30
+
+### Added
+* Unified stateful interactive CLI shell when executing `securelens` with no subcommands.
+* Shell commands `/scan` (run codebase audit), `/scan-web` (run URL check), `/configure` (wizard setups), `/issues` (list/filter vulnerability categories), `/files`, `/score`, `/model`, `/export <pdf/json/markdown>`, `/clear` and `/exit`.
+* LiteLLM API base proxy routing (`api_base` parameter config) for Agent Router and OpenAI-compatible proxy gateways.
+
+### Fixed
+* Bypassed Agent Router client authorization blocks by injecting custom User-Agent and Originator headers.
+* Resolved `UnicodeEncodeError` in PDF reports by sanitizing unmappable Unicode symbols to safe CP1252/Latin-1 characters.
+* Restructured multi_cell cursor carriage return positioning to avoid overlapping layout rendering in PDF outputs.
+
+---
+
 ## [1.1.0] - 2026-06-12
 
 ### Added
