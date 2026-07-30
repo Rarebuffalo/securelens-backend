@@ -212,34 +212,6 @@ async def run_global_shell(ctx: ShellContext) -> None:
     console.print("[bold cyan]Welcome to SecureLens AI Interactive Shell[/bold cyan]")
     console.print("[dim]Type [bold]/help[/bold] for a list of available commands or [bold]/exit[/bold] to quit.[/dim]\n")
 
-    # ── Project Auto-Detection on Startup ────────────────────────────────────
-    project_markers = [
-        ".git", "pyproject.toml", "package.json", "Makefile",
-        "requirements.txt", "Cargo.toml", "go.mod", "setup.py",
-        "docker-compose.yml"
-    ]
-    has_project = any(os.path.exists(m) for m in project_markers)
-    if has_project and not os.environ.get("SECURELENS_TESTING"):
-        console.print(f"[bold green]✓ Auto-detected project directory:[/bold green] [dim]{os.getcwd()}[/dim]")
-        console.print("[dim]Automatically running local codebase scan...[/dim]\n")
-        cfg = load_config()
-        ctx.api_key = cfg.api_key
-        ctx.api_base = cfg.api_base
-        ctx.model = cfg.default_model
-
-        no_ai = not ctx.api_key
-        result = await run_local_scan_workflow(
-            path=".",
-            cfg=cfg,
-            no_ai=no_ai,
-            sync=False,
-            ci=False,
-        )
-        if result:
-            ctx.active_result = result
-            ctx.target_type = "code"
-            ctx.conversation_history.clear()
-
     try:
         while True:
             # ── Dynamic Prompt state ─────────────────────────────────────────
@@ -254,7 +226,7 @@ async def run_global_shell(ctx: ShellContext) -> None:
                 prompt_str = "[bold cyan]securelens >[/bold cyan] "
 
             try:
-                user_input = Prompt.ask(prompt_str)
+                user_input = Prompt.ask(prompt_str, colon=False)
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Goodbye![/dim]\n")
                 break
