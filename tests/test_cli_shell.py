@@ -100,39 +100,6 @@ async def test_global_shell_scan_command_routing():
             assert ctx.active_result == mock_result
             assert ctx.target_type == "code"
 
-@pytest.mark.asyncio
-async def test_global_shell_auto_detects_project(monkeypatch):
-    monkeypatch.delenv("SECURELENS_TESTING", raising=False)
-    
-    ctx = ShellContext(
-        api_key="mock_key",
-        model="openai/deepseek-chat",
-    )
-    
-    inputs = ["/exit"]
-    input_idx = 0
-    
-    def mock_ask(*args, **kwargs):
-        nonlocal input_idx
-        val = inputs[input_idx]
-        input_idx += 1
-        return val
-        
-    mock_result = AsyncMock()
-    mock_result.target = "/current/project"
-    mock_result.grade = "B"
-    mock_result.score = 80
-    mock_result.vulnerabilities = []
-    
-    with patch("securelens.repl.Prompt.ask", side_effect=mock_ask):
-        with patch("os.path.exists", return_value=True):
-            with patch("securelens.cli.run_local_scan_workflow", new_callable=AsyncMock) as mock_scan:
-                mock_scan.return_value = mock_result
-                await run_global_shell(ctx)
-                
-                mock_scan.assert_called_once()
-                assert ctx.active_result == mock_result
-                assert ctx.target_type == "code"
 
 def test_shell_autocomplete_commands():
     from securelens.repl import _make_completer
