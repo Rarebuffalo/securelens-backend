@@ -12,14 +12,24 @@ The AI is given full scan context at the start of the conversation
 and remembers the entire chat history during the session.
 """
 
+import glob
 import json
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.formatted_text import HTML
 
 from securelens.ai import call_ai
 from securelens.ai.prompts import chat_prompt
@@ -93,217 +103,200 @@ Or ask a question in plain English about the active scan:
 """
 
 
-def _make_completer(ctx: ShellContext):
-    import os
-    import glob
-    import readline
+class SecureLensCompleter(Completer):
+    def __init__(self, ctx: ShellContext):
+        self.ctx = ctx
+        self.commands = [
+            "/scan", "/scan-web", "/configure", "/score", "/issues", 
+            "/files", "/export", "/model", "/clear", "/help", "/exit"
+        ]
+        self.export_formats = ["markdown", "json", "pdf"]
+        self.severity_levels = ["critical", "high", "medium", "low"]
+        self.common_models = [
+            "gemini/gemini-2.0-flash", "gemini/gemini-1.5-pro",
+            "gpt-4o-mini", "gpt-4o", "claude-3-5-haiku-20241022",
+            "ollama/llama3.1", "openai/deepseek-chat"
+        ]
 
-    commands = [
-        "/scan", "/scan-web", "/configure", "/score", "/issues", 
-        "/files", "/export", "/model", "/clear", "/help", "/exit"
-    ]
-    export_formats = ["markdown", "json", "pdf"]
-    severity_levels = ["critical", "high", "medium", "low"]
-    common_models = [
-        "gemini/gemini-2.0-flash", "gemini/gemini-1.5-pro",
-        "gpt-4o-mini", "gpt-4o", "claude-3-5-haiku-20241022",
-        "ollama/llama3.1", "openai/deepseek-chat"
-    ]
-
-    def completer(text, state):
-        line = readline.get_line_buffer()
-        words = line.split()
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        words = text.split()
 
         # Completing the main command
-        if not line or (line.startswith("/") and " " not in line):
-            options = [cmd for cmd in commands if cmd.startswith(text)]
-            if state < len(options):
-                return options[state]
-            return None
+        if not text or (text.startswith("/") and " " not in text):
+            for cmd in self.commands:
+                if cmd.startswith(text):
+                    yield Completion(cmd, start_position=-len(text))
+            return
 
-        # Completing parameters
         if len(words) >= 1:
             cmd = words[0].lower()
             if cmd == "/scan":
                 prefix_start = len("/scan ")
-                path_prefix = line[prefix_start:]
+                path_prefix = text[prefix_start:]
                 
-                # Expand ~ to home directory for globbing
                 expanded_prefix = os.path.expanduser(path_prefix)
-                
                 suggestions = glob.glob(expanded_prefix + "*")
-                options = []
                 for s in suggestions:
-                    # Put back ~ if it was typed
+                    display_s = s
                     if path_prefix.startswith("~"):
                         display_s = s.replace(os.path.expanduser("~"), "~", 1)
-                    else:
-                        display_s = s
                         
                     if os.path.isdir(s):
-                        options.append(display_s + "/")
+                        val = display_s + "/"
                     else:
-                        options.append(display_s)
+                        val = display_s
                         
-                if state < len(options):
-                    return options[state]
-                return None
-                
+                    yield Completion(val, start_position=-len(path_prefix))
+                    
             elif cmd == "/export":
                 prefix_start = len("/export ")
-                fmt_prefix = line[prefix_start:]
-                options = [fmt for fmt in export_formats if fmt.startswith(fmt_prefix)]
-                if state < len(options):
-                    return options[state]
-                return None
-                
+                fmt_prefix = text[prefix_start:]
+                for fmt in self.export_formats:
+                    if fmt.startswith(fmt_prefix):
+                        yield Completion(fmt, start_position=-len(fmt_prefix))
+                        
             elif cmd == "/issues":
                 prefix_start = len("/issues ")
-                sev_prefix = line[prefix_start:]
-                options = [sev for sev in severity_levels if sev.startswith(sev_prefix)]
-                if state < len(options):
-                    return options[state]
-                return None
-                
+                sev_prefix = text[prefix_start:]
+                for sev in self.severity_levels:
+                    if sev.startswith(sev_prefix):
+                        yield Completion(sev, start_position=-len(sev_prefix))
+                        
             elif cmd == "/model":
                 prefix_start = len("/model ")
-                model_prefix = line[prefix_start:]
-                options = [m for m in common_models if m.startswith(model_prefix)]
-                if state < len(options):
-                    return options[state]
+                model_prefix = text[prefix_start:]
+                for m in self.common_models:
+                    if m.startswith(model_prefix):
+                        yield Completion(m, start_position=-len(model_prefix))
+
+
+class SecureLensAutoSuggest(AutoSuggest):
+    def get_suggestion(self, buffer, document):
+        text = document.text
+        words = text.split()
+        
+        if len(words) >= 1 and words[0].lower() == "/scan":
+            prefix_start = len("/scan ")
+            path_prefix = text[prefix_start:]
+            if not path_prefix:
                 return None
-
+                
+            expanded = os.path.expanduser(path_prefix)
+            suggestions = glob.glob(expanded + "*")
+            if suggestions:
+                first = suggestions[0]
+                display_first = first
+                if path_prefix.startswith("~"):
+                    display_first = first.replace(os.path.expanduser("~"), "~", 1)
+                if os.path.isdir(first):
+                    display_first += "/"
+                    
+                suggestion_text = display_first[len(path_prefix):]
+                return Suggestion(suggestion_text)
+                
         return None
-
-    return completer
-
-
-class ShellPrompt(Prompt):
-    prompt_suffix = ""
 
 
 async def run_global_shell(ctx: ShellContext) -> None:
-    import os
-    import readline
-    from pathlib import Path
-    from urllib.parse import urlparse
     from securelens.output import print_banner
-    from securelens.config import load_config
-    from securelens.cli import run_local_scan_workflow
 
     # ── History initialization ───────────────────────────────────────────────
     history_dir = os.path.expanduser("~/.securelens")
     os.makedirs(history_dir, exist_ok=True)
     history_file = os.path.join(history_dir, "history")
 
-    if os.path.exists(history_file):
-        try:
-            readline.read_history_file(history_file)
-        except Exception:
-            pass
-
-    readline.set_history_length(1000)
-
-    # ── Autocomplete initialization ──────────────────────────────────────────
-    readline.set_completer(_make_completer(ctx))
-    readline.set_completer_delims(" \t\n")
-    if "libedit" in readline.__doc__:
-        readline.parse_and_bind("bind ^I rl_complete")
-    else:
-        readline.parse_and_bind("tab: complete")
+    session = PromptSession(
+        history=FileHistory(history_file),
+        completer=SecureLensCompleter(ctx),
+        auto_suggest=SecureLensAutoSuggest(),
+    )
 
     print_banner()
     console.print("[bold cyan]Welcome to SecureLens AI Interactive Shell[/bold cyan]")
     console.print("[dim]Type [bold]/help[/bold] for a list of available commands or [bold]/exit[/bold] to quit.[/dim]\n")
 
-    try:
-        while True:
-            # ── Dynamic Prompt state ─────────────────────────────────────────
-            if ctx.active_result:
-                if ctx.target_type == "code":
-                    name = Path(ctx.active_result.target).name
-                    prompt_str = f"[bold cyan]securelens [{name}] >[/bold cyan] "
-                else:  # web
-                    domain = urlparse(ctx.active_result.url).netloc or ctx.active_result.url
-                    prompt_str = f"[bold cyan]securelens [{domain}] >[/bold cyan] "
-            else:
-                prompt_str = "[bold cyan]securelens >[/bold cyan] "
+    while True:
+        # ── Dynamic Prompt state ─────────────────────────────────────────
+        if ctx.active_result:
+            if ctx.target_type == "code":
+                name = Path(ctx.active_result.target).name
+                prompt_html = HTML(f"<cyan>securelens [{name}] &gt;</cyan> ")
+            else:  # web
+                domain = urlparse(ctx.active_result.url).netloc or ctx.active_result.url
+                prompt_html = HTML(f"<cyan>securelens [{domain}] &gt;</cyan> ")
+        else:
+            prompt_html = HTML("<cyan>securelens &gt;</cyan> ")
 
-            try:
-                user_input = ShellPrompt.ask(prompt_str)
-            except (KeyboardInterrupt, EOFError):
-                console.print("\n[dim]Goodbye![/dim]\n")
+        try:
+            user_input = await session.prompt_async(prompt_html)
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Goodbye![/dim]\n")
+            break
+
+        user_input = user_input.strip()
+        if not user_input:
+            continue
+
+        if user_input.startswith("/"):
+            should_exit = await _handle_global_slash_command(user_input, ctx)
+            if should_exit:
                 break
+            continue
 
-            user_input = user_input.strip()
-            if not user_input:
-                continue
+        # Chat logic about active scan result
+        if not ctx.active_result:
+            console.print("\n  [bold yellow]⚠ No active scan loaded.[/bold yellow] Run a scan first: [cyan]/scan .[/cyan]\n")
+            continue
 
-            if user_input.startswith("/"):
-                should_exit = await _handle_global_slash_command(user_input, ctx)
-                if should_exit:
-                    break
-                continue
+        if not ctx.api_key and not ctx.model.startswith("ollama/"):
+            console.print(
+                "\n  [bold red]✗ No API key configured.[/bold red] "
+                "Run [cyan]/configure[/cyan] to set one.\n"
+            )
+            continue
 
-            # Chat logic about active scan result
-            if not ctx.active_result:
-                console.print("\n  [bold yellow]⚠ No active scan loaded.[/bold yellow] Run a scan first: [cyan]/scan .[/cyan]\n")
-                continue
+        # Setup standard ReplContext so we can use existing _build_scan_context
+        repl_ctx = ReplContext(
+            target=ctx.active_result.target if ctx.target_type == "code" else ctx.active_result.url,
+            scan_result=ctx.active_result,
+            target_type=ctx.target_type,
+            api_key=ctx.api_key,
+            model=ctx.model,
+            api_base=ctx.api_base,
+            conversation_history=ctx.conversation_history,
+        )
+        scan_ctx_str = _build_scan_context(repl_ctx)
 
-            if not ctx.api_key and not ctx.model.startswith("ollama/"):
-                console.print(
-                    "\n  [bold red]✗ No API key configured.[/bold red] "
-                    "Run [cyan]/configure[/cyan] to set one.\n"
-                )
-                continue
-
-            # Setup standard ReplContext so we can use existing _build_scan_context
-            repl_ctx = ReplContext(
-                target=ctx.active_result.target if ctx.target_type == "code" else ctx.active_result.url,
-                scan_result=ctx.active_result,
-                target_type=ctx.target_type,
+        with console.status("[dim]Thinking...[/dim]", spinner="dots"):
+            prompt = chat_prompt(repl_ctx.target, scan_ctx_str, user_input)
+            response = await call_ai(
+                prompt=prompt,
                 api_key=ctx.api_key,
                 model=ctx.model,
-                api_base=ctx.api_base,
+                temperature=0.5,
                 conversation_history=ctx.conversation_history,
+                api_base=ctx.api_base,
             )
-            scan_ctx_str = _build_scan_context(repl_ctx)
 
-            with console.status("[dim]Thinking...[/dim]", spinner="dots"):
-                prompt = chat_prompt(repl_ctx.target, scan_ctx_str, user_input)
-                response = await call_ai(
-                    prompt=prompt,
-                    api_key=ctx.api_key,
-                    model=ctx.model,
-                    temperature=0.5,
-                    conversation_history=ctx.conversation_history,
-                    api_base=ctx.api_base,
-                )
+        if response:
+            ctx.conversation_history.append({"role": "user", "content": user_input})
+            ctx.conversation_history.append({"role": "assistant", "content": response})
+            if len(ctx.conversation_history) > 40:
+                ctx.conversation_history = ctx.conversation_history[-40:]
 
-            if response:
-                ctx.conversation_history.append({"role": "user", "content": user_input})
-                ctx.conversation_history.append({"role": "assistant", "content": response})
-                if len(ctx.conversation_history) > 40:
-                    ctx.conversation_history = ctx.conversation_history[-40:]
-
-                console.print()
-                console.print(Panel(
-                    Markdown(response),
-                    border_style="dim cyan",
-                    padding=(0, 1),
-                ))
-                console.print()
-            else:
-                console.print(
-                    "\n  [bold red]✗ No response from AI.[/bold red] "
-                    "Check your API key and network connection.\n"
-                )
-    finally:
-        # ── Save history ─────────────────────────────────────────────────────
-        try:
-            readline.write_history_file(history_file)
-        except Exception:
-            pass
+            console.print()
+            console.print(Panel(
+                Markdown(response),
+                border_style="dim cyan",
+                padding=(0, 1),
+            ))
+            console.print()
+        else:
+            console.print(
+                "\n  [bold red]✗ No response from AI.[/bold red] "
+                "Check your API key and network connection.\n"
+            )
 
 
 async def _handle_global_slash_command(cmd: str, ctx: ShellContext) -> bool:
