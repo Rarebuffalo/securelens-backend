@@ -178,6 +178,10 @@ def _make_completer(ctx: ShellContext):
     return completer
 
 
+class ShellPrompt(Prompt):
+    prompt_suffix = ""
+
+
 async def run_global_shell(ctx: ShellContext) -> None:
     import os
     import readline
@@ -226,7 +230,7 @@ async def run_global_shell(ctx: ShellContext) -> None:
                 prompt_str = "[bold cyan]securelens >[/bold cyan] "
 
             try:
-                user_input = Prompt.ask(prompt_str, colon=False)
+                user_input = ShellPrompt.ask(prompt_str)
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Goodbye![/dim]\n")
                 break
