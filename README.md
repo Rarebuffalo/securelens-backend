@@ -186,29 +186,42 @@ securelens web https://my-app.com --no-ai      # Raw scanner check without AI su
 securelens web https://my-app.com --output md  # Save results to markdown file
 ```
 
-### Interactive Triage REPL
+### Unified Stateful Interactive CLI Shell
 
-When running a code scan, SecureLens starts an interactive terminal shell (REPL) allowing you to query vulnerability details and export findings.
+SecureLens supports a unified interactive shell prompt. Running the main executable without any subcommands drops you directly into this shell:
 
-```text
-Ask a follow-up (or press Ctrl+C to exit)
-Type /help for available commands
-
-> Explain the SQL injection found in db.py and write a patch
-> Which files have critical severity issues?
-> /files
-> /export pdf
-> /exit
+```bash
+securelens
 ```
 
-#### Supported REPL Slash Commands
-* `/help` — Display CLI commands helper
-* `/files` — List files selected for AI triage
-* `/score` — Print the current codebase security grade (A-F)
-* `/export markdown` — Save audit to markdown report
-* `/export pdf` — Compile styled PDF audit document locally
-* `/model <name>` — Switch AI models mid-session
-* `/exit` — Terminate the interactive REPL
+This starts the stateful console session:
+
+```text
+Welcome to SecureLens AI Interactive Shell
+Type /help for a list of available commands or /exit to quit.
+
+securelens > /scan .
+... Runs scan and populates active session ...
+
+securelens > /score
+Score: 0/100 Grade: F
+
+securelens > What Cassandra connection issues were identified?
+... Ask follow-up Q&A questions directly to the AI about the active scan ...
+```
+
+#### Supported Interactive Commands
+* `/scan <path>` — Scan a local codebase (e.g. `/scan .`)
+* `/scan-web <url>` — Scan a live website (e.g. `/scan-web https://example.com`)
+* `/configure` — Launch the setup wizard to configure API keys or base URLs
+* `/files` — List files selected for AI triage in the active scan
+* `/score` — Print the security score and grade (A-F) of the active scan
+* `/issues` or `/issues <severity>` — Display a summary of all issues or filter by severity
+* `/export <pdf/json/markdown>` — Generate and save report files for the active scan
+* `/model <name>` — Switch AI models dynamically
+* `/clear` — Clear the terminal screen
+* `/help` — Display interactive commands helper
+* `/exit` — Terminate the interactive session
 
 ---
 
