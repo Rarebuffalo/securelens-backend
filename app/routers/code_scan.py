@@ -106,7 +106,8 @@ async def analyze_codebase(
             issues=issues_as_dicts,
         )
         db.add(scan_record)
-        await db.flush()  # flush to get the auto-generated id without committing yet
+        await db.commit()
+        await db.refresh(scan_record)
         scan_id = scan_record.id
 
         logger.info(f"Code scan {scan_id} persisted to database.")
@@ -319,7 +320,8 @@ async def sync_codebase_scan(
             issues=issues_as_dicts,
         )
         db.add(scan_record)
-        await db.flush()
+        await db.commit()
+        await db.refresh(scan_record)
         return CodeScanResponse(
             scan_id=scan_record.id,
             repo_url=request.repo_url,
