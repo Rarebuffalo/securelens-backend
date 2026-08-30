@@ -38,7 +38,7 @@ import shutil
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.database import AsyncSessionLocal
+from app import database as app_db
 from app.models.nuclei_result import NucleiScanResult
 
 logger = logging.getLogger(__name__)
@@ -167,13 +167,16 @@ async def _save_nuclei_result(
     status: str,
 ) -> None:
     """Persist the Nuclei scan result. Uses its own session (background context)."""
-    async with AsyncSessionLocal() as db:
-        row = NucleiScanResult(
-            scan_result_id=scan_result_id,
-            url=url,
-            findings=findings,
-            status=status,
-            completed_at=datetime.now(timezone.utc),
-        )
-        db.add(row)
-        await db.commit()
+    try:
+        async with app_db.AsyncSessionLocal() as db:
+            row = NucleiScanResult(
+                scan_result_id=scan_result_id,
+                url=url,
+                findings=findings,
+                status=status,
+                completed_at=datetime.now(timezone.utc),
+            )
+            db.add(row)
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to persist Nuclei scan result: {e}")
