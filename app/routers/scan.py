@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_db, AsyncSessionLocal
 from app.middleware.auth import get_optional_user
 from app.middleware.rate_limiter import limiter
 from app.models.scan import ScanResult
@@ -53,7 +53,6 @@ async def _post_scan_tasks(
     url: str,
     score: int,
     issue_count: int,
-    db: AsyncSession,
 ) -> None:
     """
     Groups all post-scan side-effects that run as a background task:
@@ -66,7 +65,11 @@ async def _post_scan_tasks(
     never add latency to the scan endpoint.
     """
     scan_summary = {"scan_id": scan_id, "url": url, "score": score}
-    await dispatch_webhooks(user_id, scan_summary, db)
+    try:
+        async with AsyncSessionLocal() as bg_db:
+            await dispatch_webhooks(user_id, scan_summary, bg_db)
+    except Exception as e:
+        logger.error(f"Failed to dispatch webhooks in background: {e}")
 
     slack_msg = f"URL: {url}\nScore: {score}/100  |  Issues found: {issue_count}"
     await send_slack_alert(title="SecureLens Scan Complete", message=slack_msg)
@@ -156,7 +159,6 @@ async def scan_website(
                 url,
                 score,
                 len(all_issues),
-                db,
             )
 
         return ScanResponse(
