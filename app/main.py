@@ -10,7 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import settings
 from app.database import close_db, init_db
 from app.middleware.rate_limiter import limiter
-from app.routers import auth, health, history, scan, apikey, report, code_scan
+from app.routers import auth, health, history, scan, apikey, report, code_scan, webhook
 from app.routers import scheduled_scans
 from app.services.scheduler import start_scheduler, stop_scheduler
 
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     application.include_router(report.router)
     application.include_router(code_scan.router)
     application.include_router(scheduled_scans.router)
+    application.include_router(webhook.router)
 
     logger.info(f"{settings.app_name} v{settings.app_version} initialized")
 
