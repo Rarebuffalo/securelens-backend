@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, ConfigDict, HttpUrl
 
 
 class WebhookCreate(BaseModel):
@@ -8,10 +8,9 @@ class WebhookCreate(BaseModel):
 
 
 class WebhookResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     target_url: str
     is_active: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
