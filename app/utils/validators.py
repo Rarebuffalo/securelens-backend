@@ -34,6 +34,18 @@ def validate_url(url: str) -> str:
     try:
         resolved_ip = socket.gethostbyname(hostname)
         ip = ipaddress.ip_address(resolved_ip)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Scanning internal/private IP addresses is not allowed",
+            )
         for network in PRIVATE_NETWORKS:
             if ip in network:
                 raise HTTPException(
