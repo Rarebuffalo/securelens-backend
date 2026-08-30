@@ -52,7 +52,7 @@ except ImportError:
 
 from sqlalchemy import select
 
-from app.database import AsyncSessionLocal
+from app import database as app_db
 from app.models.scheduled_scan import ScheduledScan
 from app.models.scan import ScanResult
 from app.models.webhook import Webhook
@@ -147,7 +147,7 @@ async def _run_single_scan(scheduled: ScheduledScan) -> None:
 
         previous_score = scheduled.last_score
 
-        async with AsyncSessionLocal() as db:
+        async with app_db.AsyncSessionLocal() as db:
             # Save the new scan result
             scan_record = ScanResult(
                 user_id=user_id,
@@ -196,7 +196,7 @@ async def _run_single_scan(scheduled: ScheduledScan) -> None:
                 # Fetch user email to send the regression alert
                 from sqlalchemy import select as _select
                 from app.models.user import User
-                async with AsyncSessionLocal() as email_db:
+                async with app_db.AsyncSessionLocal() as email_db:
                     user_result = await email_db.execute(
                         _select(User).where(User.id == user_id)
                     )
@@ -234,7 +234,7 @@ async def _run_due_scans() -> None:
         "weekly": now - timedelta(days=7),
     }
 
-    async with AsyncSessionLocal() as db:
+    async with app_db.AsyncSessionLocal() as db:
         result = await db.execute(
             select(ScheduledScan).where(ScheduledScan.is_active == True)  # noqa: E712
         )
