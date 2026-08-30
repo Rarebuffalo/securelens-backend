@@ -112,13 +112,46 @@ class Settings(BaseSettings):
         """
         Returns an async-compatible database URL.
         Normalises postgres:// and postgresql:// prefixes to postgresql+asyncpg://
-        for compatibility with cloud database providers (e.g. Neon, Render, Supabase).
+        and converts libpq query parameters (e.g. sslmode=require) to asyncpg-compatible
+        parameters (e.g. ssl=require) for cloud database providers (e.g. Neon, Render, Supabase).
         """
+        import urllib.parse
+
         url = self.database_url
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if not url:
+            return url
+
+        if url.startswith(("postgres://", "postgresql://", "postgresql+asyncpg://")):
+            parsed = urllib.parse.urlparse(url)
+            qs = urllib.parse.parse_qs(parsed.query)
+
+            scheme = "postgresql+asyncpg"
+
+            # Translate sslmode -> ssl for asyncpg compatibility
+            if "sslmode" in qs:
+                sslmode_val = qs.pop("sslmode")[0]
+                if sslmode_val in ("require", "verify-ca", "verify-full", "prefer") and "ssl" not in qs:
+                    qs["ssl"] = ["require"]
+
+            allowed_asyncpg_params = {
+                "ssl",
+                "timeout",
+                "statement_cache_size",
+                "max_cached_statement_lifetime",
+                "max_cacheable_statement_size",
+                "command_timeout",
+                "server_settings",
+                "target_session_attrs",
+                "krbsrvname",
+                "gsslib",
+            }
+            cleaned_qs = {k: v for k, v in qs.items() if k in allowed_asyncpg_params}
+            new_query = urllib.parse.urlencode(cleaned_qs, doseq=True)
+
+            return urllib.parse.urlunparse(
+                (scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
+            )
+
         return url
 
 
