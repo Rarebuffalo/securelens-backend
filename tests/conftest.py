@@ -26,6 +26,10 @@ async def override_get_db():
             raise
 
 
+from app import database as app_db
+app_db.AsyncSessionLocal = TestSessionLocal
+app_db.engine = test_engine
+
 app.dependency_overrides[get_db] = override_get_db
 
 
