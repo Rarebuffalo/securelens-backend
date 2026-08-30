@@ -44,6 +44,24 @@ def test_rejects_loopback():
     assert exc_info.value.status_code == 400
 
 
+def test_rejects_class_a_private_ip():
+    with pytest.raises(HTTPException) as exc_info:
+        validate_url("http://10.0.0.5")
+    assert exc_info.value.status_code == 400
+
+
+def test_rejects_class_b_private_ip():
+    with pytest.raises(HTTPException) as exc_info:
+        validate_url("http://172.16.0.1")
+    assert exc_info.value.status_code == 400
+
+
+def test_rejects_link_local_ip():
+    with pytest.raises(HTTPException) as exc_info:
+        validate_url("http://169.254.169.254")
+    assert exc_info.value.status_code == 400
+
+
 def test_rejects_unresolvable_host():
     with pytest.raises(HTTPException) as exc_info:
         validate_url("http://this-domain-does-not-exist-xyz123.com")
