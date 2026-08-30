@@ -14,6 +14,10 @@ venv/
 .coverage
 htmlcov/
 *.db
+*.sqlite
+*.sqlite3
+# Generated reports & test artifacts
+securelens-report-*
 # CLI build artifacts
 cli/*.egg-info/
 cli/**/__pycache__/

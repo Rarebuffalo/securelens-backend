@@ -461,8 +461,22 @@ As of **August 2026**, the core functionality of SecureLens has undergone end-to
 * **Backend API & Data Layer:** Verified (Authentication, sync, history, user isolation, webhooks, scheduling).
 * **External Scanners:** Verified Nuclei subprocess execution and graceful fallback.
 
+---
+
+## Live Demo & Hosted API
+
+SecureLens is designed as a **CLI-first tool** that works 100% locally and offline without requiring a server. For multi-device scan synchronization, history persistence, and team integrations, a demonstration API instance is hosted on Render with Neon PostgreSQL:
+
+* **Live Health Endpoint:** `https://securelens-backend.onrender.com/health`
+* **Interactive API Docs:** `https://securelens-backend.onrender.com/docs`
+
+To sync local scans with the demo backend:
+```bash
+securelens scan . --sync --api-url https://securelens-backend.onrender.com
+```
+
 > [!NOTE]
-> Core functionality has been audited and verified for single-node deployment. Production deployment requires appropriate secrets, PostgreSQL configuration, HTTPS termination, backups, and environment-specific hardening as detailed in [DEPLOYMENT.md](DEPLOYMENT.md).
+> Free demonstration instances on Render automatically spin down after inactivity. Initial requests after idling may take a few seconds to warm up.
 
 ---
 
