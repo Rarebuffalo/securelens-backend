@@ -19,6 +19,7 @@ dependencies = [
     "questionary>=2.0",
     "pathspec>=0.12",
     "fpdf2>=2.7",
+    "prompt_toolkit>=3.0",
 ]
 
 [project.scripts]
