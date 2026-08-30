@@ -107,5 +107,19 @@ class Settings(BaseSettings):
         """
         return self.ai_api_key or self.gemini_api_key
 
+    @property
+    def async_database_url(self) -> str:
+        """
+        Returns an async-compatible database URL.
+        Normalises postgres:// and postgresql:// prefixes to postgresql+asyncpg://
+        for compatibility with cloud database providers (e.g. Neon, Render, Supabase).
+        """
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
 
 settings = Settings()
